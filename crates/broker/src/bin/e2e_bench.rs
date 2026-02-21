@@ -286,6 +286,7 @@ fn run_produce_scenario(
     collect_stats(handles)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_produce_worker(
     worker_id: usize,
     target_rate: u64,
@@ -710,6 +711,7 @@ fn run_produce_shared_scenario(
     Ok(stats)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_produce_worker_shared(
     worker_id: usize,
     target_rate: u64,
@@ -821,7 +823,7 @@ fn run_produce_worker_shared(
             in_flight.push_back(Instant::now());
             corr_id = corr_id.wrapping_add(1);
         }
-        while let Some(_) = in_flight.pop_front() {
+        while in_flight.pop_front().is_some() {
             let _ = read_response_frame(&mut stream, &mut response_buf);
         }
     }
@@ -914,6 +916,7 @@ fn run_fetch_shared_scenario(
     Ok(stats)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_fetch_worker_shared(
     worker_id: usize,
     target_rate: u64,
@@ -987,7 +990,6 @@ fn run_fetch_worker_shared(
     let preload_limit = i64::try_from(FETCH_PRELOAD_COUNT).unwrap_or(i64::MAX);
 
     let mut pacer = TargetPacer::new(target_rate);
-    let mut total_ops: u64 = 0;
     let mut measured_ops: u64 = 0;
     let mut fetch_corr: i32 = 1;
     let mut next_offset: i64 = 0;
@@ -995,6 +997,7 @@ fn run_fetch_worker_shared(
 
     if pipeline_depth <= 1 {
         // ── Ping-pong: one request in-flight at a time ───────────────────────
+        let mut total_ops: u64 = 0;
         loop {
             if pacer.elapsed() >= wall_deadline {
                 break;
@@ -1055,7 +1058,6 @@ fn run_fetch_worker_shared(
                 .map_err(|e| format!("worker {worker_id} fetch pipeline read: {e}"))?;
             let elapsed_ns = duration_ns(t0.elapsed());
 
-            total_ops += 1;
             if pacer.elapsed() >= warmup_deadline {
                 measured_ops += 1;
                 latencies_ns.push(elapsed_ns);

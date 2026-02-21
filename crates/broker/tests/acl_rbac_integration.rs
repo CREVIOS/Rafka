@@ -483,8 +483,7 @@ fn tenant_isolation_with_many_tenants() {
     }
 
     // Each tenant can access only its own topic
-    for i in 0..20_usize {
-        let tenant = &tenants[i];
+    for (i, tenant) in tenants.iter().enumerate().take(20_usize) {
         let my_topic = format!("{tenant}-events");
         let other_topic = format!("tenant-{}-events", (i + 1) % 20);
 

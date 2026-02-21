@@ -38,8 +38,6 @@ pub fn sendfile_range(socket: &TcpStream, path: &Path, offset: u64, len: u64) ->
 
 fn pread_write(socket: &TcpStream, path: &Path, offset: u64, len: u64) -> io::Result<u64> {
     use std::fs::File;
-    #[cfg(unix)]
-    use std::os::unix::fs::FileExt;
 
     let file = File::open(path)?;
     let len_usize = usize::try_from(len)
