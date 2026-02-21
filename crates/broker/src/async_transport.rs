@@ -200,26 +200,18 @@ async fn handle_connection(
     let (read_half, write_half) = stream.into_split();
 
     // reader → processor channel (capacity = max_in_flight for back-pressure)
-    let (frame_tx, frame_rx) =
-        mpsc::channel::<(u64, Vec<u8>)>(max_in_flight);
+    let (frame_tx, frame_rx) = mpsc::channel::<(u64, Vec<u8>)>(max_in_flight);
     // processor → writer channel (same capacity)
-    let (resp_tx, resp_rx) =
-        mpsc::channel::<(u64, Vec<u8>)>(max_in_flight);
+    let (resp_tx, resp_rx) = mpsc::channel::<(u64, Vec<u8>)>(max_in_flight);
 
     let reader = tokio::spawn(reader_task(read_half, frame_tx, max_frame_size));
-    let processor = tokio::spawn(process_task(
-        frame_rx,
-        resp_tx,
-        state,
-        connection_state,
-    ));
+    let processor = tokio::spawn(process_task(frame_rx, resp_tx, state, connection_state));
     let writer = tokio::spawn(writer_task(write_half, resp_rx));
 
     // Collect results.  If reader or processor close their channels (EOF or
     // error), the downstream tasks drain and exit on their own.  We join all
     // three and surface the first non-OK error.
-    let (r_reader, r_processor, r_writer) =
-        tokio::join!(reader, processor, writer);
+    let (r_reader, r_processor, r_writer) = tokio::join!(reader, processor, writer);
 
     for join_result in [r_reader, r_processor, r_writer] {
         match join_result {
@@ -303,15 +295,14 @@ async fn process_task(
         let state_clone = state.clone();
         // Move connection_state into the blocking closure; get it back out.
         let conn_state_in = connection_state;
-        let (response, conn_state_out) =
-            tokio::task::spawn_blocking(move || {
-                dispatch_frame_blocking(state_clone, frame, conn_state_in)
-            })
-            .await
-            .map_err(|err| TransportError::Io {
-                operation: "spawn_blocking_dispatch",
-                message: err.to_string(),
-            })??;
+        let (response, conn_state_out) = tokio::task::spawn_blocking(move || {
+            dispatch_frame_blocking(state_clone, frame, conn_state_in)
+        })
+        .await
+        .map_err(|err| TransportError::Io {
+            operation: "spawn_blocking_dispatch",
+            message: err.to_string(),
+        })??;
         connection_state = conn_state_out;
 
         if resp_tx.send((seq_no, response)).await.is_err() {
@@ -371,13 +362,10 @@ async fn writer_task(
         }
 
         // Flush once after the batch.
-        writer
-            .flush()
-            .await
-            .map_err(|err| TransportError::Io {
-                operation: "writer_flush",
-                message: err.to_string(),
-            })?;
+        writer.flush().await.map_err(|err| TransportError::Io {
+            operation: "writer_flush",
+            message: err.to_string(),
+        })?;
     }
     Ok(())
 }
@@ -482,12 +470,9 @@ impl AsyncTransportServerSharded {
             .await
             .map_err(|e| TransportSharedError::Setup(e.to_string()))?;
 
-        let sharded = BrokerSharedState::open_with_security(
-            &data_dir,
-            log_config.clone(),
-            security.clone(),
-        )
-        .await?;
+        let sharded =
+            BrokerSharedState::open_with_security(&data_dir, log_config.clone(), security.clone())
+                .await?;
 
         // Build the fallback TransportServer synchronously on a blocking thread.
         let fallback_state = {
@@ -522,10 +507,14 @@ impl AsyncTransportServerSharded {
     }
 
     pub async fn serve_one_connection(&self) -> Result<(), TransportError> {
-        let (stream, _) = self.listener.accept().await.map_err(|e| TransportError::Io {
-            operation: "sharded_accept",
-            message: e.to_string(),
-        })?;
+        let (stream, _) = self
+            .listener
+            .accept()
+            .await
+            .map_err(|e| TransportError::Io {
+                operation: "sharded_accept",
+                message: e.to_string(),
+            })?;
         handle_connection_sharded(
             stream,
             self.sharded.clone(),
@@ -538,8 +527,11 @@ impl AsyncTransportServerSharded {
     pub async fn serve_n_connections_concurrent(&self, count: usize) -> Result<(), TransportError> {
         let mut handles: Vec<JoinHandle<Result<(), TransportError>>> = Vec::with_capacity(count);
         for _ in 0..count {
-            let (stream, _) =
-                self.listener.accept().await.map_err(|e| TransportError::Io {
+            let (stream, _) = self
+                .listener
+                .accept()
+                .await
+                .map_err(|e| TransportError::Io {
                     operation: "sharded_accept",
                     message: e.to_string(),
                 })?;
@@ -643,11 +635,10 @@ async fn process_task_sharded(
         let (response, new_conn_state) = if api_key == API_KEY_SHARDED_PRODUCE {
             // ── Priority 2: group-commit produce path ────────────────────────
             // 1. Parse frame header synchronously (no I/O).
-            let (api_version, correlation_id, body) =
-                match parse_produce_frame_header(&frame) {
-                    Ok(v) => v,
-                    Err(e) => return Err(e),
-                };
+            let (api_version, correlation_id, body) = match parse_produce_frame_header(&frame) {
+                Ok(v) => v,
+                Err(e) => return Err(e),
+            };
             sharded.metrics.record_api_request(api_key, api_version);
 
             // 2. Decode the ProduceRequest.
@@ -703,7 +694,10 @@ async fn process_task_sharded(
                             .map(|(k, v)| (k, v, timestamp_ms))
                             .collect();
                     sharded.metrics.record_partition_event(
-                        "produce", &tp_name, partition.index, payload_len,
+                        "produce",
+                        &tp_name,
+                        partition.index,
+                        payload_len,
                     );
 
                     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -734,31 +728,34 @@ async fn process_task_sharded(
             let mut by_topic: Vec<(Option<String>, Option<[u8; 16]>, Vec<(i32, i16, i64, i64)>)> =
                 Vec::new();
             for sub in submissions {
-                let (error_code, base_offset, log_start_offset) =
-                    match sub.rx.await {
-                        Ok(Ok(offsets)) => {
-                            let base = offsets.first().copied().unwrap_or(-1);
-                            (0_i16, base, 0_i64)
-                        }
-                        Ok(Err(_)) | Err(_) => (-1_i16, -1_i64, -1_i64),
-                    };
+                let (error_code, base_offset, log_start_offset) = match sub.rx.await {
+                    Ok(Ok(offsets)) => {
+                        let base = offsets.first().copied().unwrap_or(-1);
+                        (0_i16, base, 0_i64)
+                    }
+                    Ok(Err(_)) | Err(_) => (-1_i16, -1_i64, -1_i64),
+                };
                 // Find or insert the topic entry.
-                let pos = by_topic.iter().position(|(n, id, _)| {
-                    n == &sub.topic_name && id == &sub.topic_id
-                });
+                let pos = by_topic
+                    .iter()
+                    .position(|(n, id, _)| n == &sub.topic_name && id == &sub.topic_id);
                 let entry = if let Some(i) = pos {
                     &mut by_topic[i]
                 } else {
                     by_topic.push((sub.topic_name, sub.topic_id, Vec::new()));
                     by_topic.last_mut().unwrap()
                 };
-                entry.2.push((sub.partition_index, error_code, base_offset, log_start_offset));
+                entry.2.push((
+                    sub.partition_index,
+                    error_code,
+                    base_offset,
+                    log_start_offset,
+                ));
             }
 
             // 5. Encode the response (no I/O — pure serialisation).
-            let response_bytes = encode_sharded_produce_response(
-                api_version, api_key, correlation_id, &by_topic,
-            )?;
+            let response_bytes =
+                encode_sharded_produce_response(api_version, api_key, correlation_id, &by_topic)?;
             sharded.metrics.record_api_response(api_key, api_version);
             (response_bytes, connection_state)
         } else {
@@ -843,11 +840,15 @@ fn dispatch_frame_sharded_blocking(
     // correlation_id is at [4..8], client_id follows; skip via a minimal parse.
     let mut cursor: usize = 4;
     // correlation_id (4 bytes)
-    if frame.len() < cursor + 4 { return Err(TransportError::Truncated); }
+    if frame.len() < cursor + 4 {
+        return Err(TransportError::Truncated);
+    }
     let correlation_id = i32::from_be_bytes(frame[cursor..cursor + 4].try_into().unwrap());
     cursor += 4;
     // client_id: 2-byte length + bytes (legacy non-flexible header, version < 9)
-    if frame.len() < cursor + 2 { return Err(TransportError::Truncated); }
+    if frame.len() < cursor + 2 {
+        return Err(TransportError::Truncated);
+    }
     let client_id_len = i16::from_be_bytes([frame[cursor], frame[cursor + 1]]) as i32;
     cursor += 2;
     if client_id_len > 0 {
@@ -855,13 +856,15 @@ fn dispatch_frame_sharded_blocking(
     }
     if api_key == 0 && api_version >= 9 {
         // Flexible header: skip tagged fields varint after client_id.
-        if cursor < frame.len() { cursor += 1; } // 0 tagged fields = 0x00
+        if cursor < frame.len() {
+            cursor += 1;
+        } // 0 tagged fields = 0x00
     }
     let body = &frame[cursor..];
 
     // ── 2. Decode Produce request ─────────────────────────────────────────────
-    let (decoded, _read) = ProduceRequest::decode(api_version, body)
-        .map_err(TransportError::Protocol)?;
+    let (decoded, _read) =
+        ProduceRequest::decode(api_version, body).map_err(TransportError::Protocol)?;
 
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -902,9 +905,10 @@ fn dispatch_frame_sharded_blocking(
                 } else {
                     drop(map);
                     // Create the partition log on the first produce.
-                    let dir = sharded.broker.data_dir.join(
-                        format!("{}-{}", topic_name, partition.index)
-                    );
+                    let dir = sharded
+                        .broker
+                        .data_dir
+                        .join(format!("{}-{}", topic_name, partition.index));
                     let config = sharded.broker.log_config.clone();
                     let new_log = match crate::PersistentSegmentLog::open(dir, config) {
                         Ok(log) => log,
@@ -940,12 +944,8 @@ fn dispatch_frame_sharded_blocking(
     }
 
     // ── 4. Encode response ────────────────────────────────────────────────────
-    let response_bytes = encode_sharded_produce_response(
-        api_version,
-        api_key,
-        correlation_id,
-        &topic_results,
-    )?;
+    let response_bytes =
+        encode_sharded_produce_response(api_version, api_key, correlation_id, &topic_results)?;
 
     Ok((response_bytes, connection_state))
 }

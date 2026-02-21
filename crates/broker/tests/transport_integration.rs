@@ -2012,7 +2012,8 @@ fn transport_produce_v3_roundtrip_and_persistence() {
         .expect("join server thread")
         .expect("server should finish normally");
 
-    let mut reopened = PartitionedBroker::open(temp.path(), log_config()).expect("reopen broker state");
+    let mut reopened =
+        PartitionedBroker::open(temp.path(), log_config()).expect("reopen broker state");
     let persisted = reopened
         .fetch_from_partition("orders", 0, 0, 10)
         .expect("fetch persisted records");
@@ -2087,7 +2088,8 @@ fn transport_produce_v13_topic_id_roundtrip() {
         .expect("join server thread")
         .expect("server should finish normally");
 
-    let mut reopened = PartitionedBroker::open(temp.path(), log_config()).expect("reopen broker state");
+    let mut reopened =
+        PartitionedBroker::open(temp.path(), log_config()).expect("reopen broker state");
     let route_topic = topic_id_hex(topic_id);
     let persisted = reopened
         .fetch_from_partition(&route_topic, 5, 0, 10)

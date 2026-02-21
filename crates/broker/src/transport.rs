@@ -36,10 +36,10 @@ use crate::{
     ClassicGroupCoordinator, ClassicGroupCoordinatorError, ClassicGroupStoreConfig, EndTxnInput,
     HeartbeatInput, InitProducerInput, JoinGroupInput, JoinProtocol, LeaveGroupMemberInput,
     OffsetCommitInput, OffsetCoordinator, OffsetCoordinatorError, OffsetStoreConfig, OffsetTopic,
-    PartitionedBroker, PartitionedBrokerError, PendingWriteBatch, PersistentLogConfig, StorageError,
-    SyncAssignment,
-    SyncGroupInput, TransactionCoordinator, TransactionCoordinatorError, TransactionStoreConfig,
-    WriteTxnMarkerInput, WriteTxnMarkerTopicInput,
+    PartitionedBroker, PartitionedBrokerError, PendingWriteBatch, PersistentLogConfig,
+    StorageError, SyncAssignment, SyncGroupInput, TransactionCoordinator,
+    TransactionCoordinatorError, TransactionStoreConfig, WriteTxnMarkerInput,
+    WriteTxnMarkerTopicInput,
 };
 
 const API_KEY_PRODUCE: i16 = 0;
@@ -692,13 +692,9 @@ impl TransportServer {
                             let records = crate::decode_records_batch(payload);
                             let mut enqueue_err: Option<i16> = None;
                             for (key, value) in records {
-                                if let Err(err) = batch.enqueue(
-                                    &route_key,
-                                    partition_index,
-                                    key,
-                                    value,
-                                    ts,
-                                ) {
+                                if let Err(err) =
+                                    batch.enqueue(&route_key, partition_index, key, value, ts)
+                                {
                                     enqueue_err = Some(map_partition_error(&err));
                                     break;
                                 }
@@ -752,43 +748,46 @@ impl TransportServer {
                 Vec::with_capacity(intent.slots.len());
 
             for slot in intent.slots {
-                let (error_code, base_offset, log_start_offset) =
-                    if slot.error_code != ERROR_NONE {
-                        (slot.error_code, -1_i64, -1_i64)
-                    } else if let Some((ref rk, pi)) = slot.enqueued {
-                        // Pop the first offset assigned to this partition.
-                        let tp = crate::TopicPartition {
-                            topic: rk.clone(),
-                            partition: pi,
-                        };
-                        let assigned_offset = partition_offsets
-                            .get_mut(&tp)
-                            .and_then(|v| if v.is_empty() { None } else { Some(v.remove(0)) })
-                            .unwrap_or(-1);
-
-                        if assigned_offset < 0 {
-                            (ERROR_UNKNOWN_SERVER_ERROR, -1, -1)
-                        } else {
-                            let mut final_error = ERROR_NONE;
-                            if let Some(tx_id) = transactional_id.as_deref() {
-                                if let Err(err) = self.transactions.record_produce(
-                                    tx_id,
-                                    rk,
-                                    pi,
-                                    assigned_offset,
-                                ) {
-                                    final_error = map_transaction_error(&err);
-                                }
-                            }
-                            if final_error == ERROR_NONE {
-                                (ERROR_NONE, assigned_offset, 0_i64)
+                let (error_code, base_offset, log_start_offset) = if slot.error_code != ERROR_NONE {
+                    (slot.error_code, -1_i64, -1_i64)
+                } else if let Some((ref rk, pi)) = slot.enqueued {
+                    // Pop the first offset assigned to this partition.
+                    let tp = crate::TopicPartition {
+                        topic: rk.clone(),
+                        partition: pi,
+                    };
+                    let assigned_offset = partition_offsets
+                        .get_mut(&tp)
+                        .and_then(|v| {
+                            if v.is_empty() {
+                                None
                             } else {
-                                (final_error, -1, -1)
+                                Some(v.remove(0))
+                            }
+                        })
+                        .unwrap_or(-1);
+
+                    if assigned_offset < 0 {
+                        (ERROR_UNKNOWN_SERVER_ERROR, -1, -1)
+                    } else {
+                        let mut final_error = ERROR_NONE;
+                        if let Some(tx_id) = transactional_id.as_deref() {
+                            if let Err(err) =
+                                self.transactions
+                                    .record_produce(tx_id, rk, pi, assigned_offset)
+                            {
+                                final_error = map_transaction_error(&err);
                             }
                         }
-                    } else {
-                        (ERROR_UNKNOWN_SERVER_ERROR, -1, -1)
-                    };
+                        if final_error == ERROR_NONE {
+                            (ERROR_NONE, assigned_offset, 0_i64)
+                        } else {
+                            (final_error, -1, -1)
+                        }
+                    }
+                } else {
+                    (ERROR_UNKNOWN_SERVER_ERROR, -1, -1)
+                };
 
                 self.metrics.record_partition_event(
                     "produce",
@@ -881,12 +880,9 @@ impl TransportServer {
                     // re-decoding.  The high-watermark lookup and the
                     // read_committed transaction-filter path still use the
                     // conventional fetch when needed.
-                    let high_watermark = partition_high_watermark(
-                        &mut self.broker,
-                        &route_key,
-                        partition.partition,
-                    )
-                    .unwrap_or(-1);
+                    let high_watermark =
+                        partition_high_watermark(&mut self.broker, &route_key, partition.partition)
+                            .unwrap_or(-1);
 
                     let partition_response = if !read_committed {
                         // Fast path: read value bytes directly from the file.
@@ -2239,7 +2235,10 @@ fn request_header_version(api_key: i16, api_version: i16) -> Result<i16, Transpo
     }
 }
 
-pub(crate) fn response_header_version(api_key: i16, api_version: i16) -> Result<i16, TransportError> {
+pub(crate) fn response_header_version(
+    api_key: i16,
+    api_version: i16,
+) -> Result<i16, TransportError> {
     match api_key {
         API_KEY_API_VERSIONS => Ok(API_VERSIONS_RESPONSE_HEADER_VERSION),
         API_KEY_PRODUCE => {

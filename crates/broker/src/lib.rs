@@ -35,8 +35,8 @@ pub use rafka_coordinator::{
     WriteTxnMarkerTopicInput, WriteTxnMarkerTopicPartitionResult, WriteTxnMarkerTopicResult,
 };
 pub use rafka_storage::{
-    FileRange, PersistentLogConfig, PersistentSegmentLog, Record, SegmentLog, SegmentSnapshot,
-    StorageError, sendfile_range,
+    sendfile_range, FileRange, PersistentLogConfig, PersistentSegmentLog, Record, SegmentLog,
+    SegmentSnapshot, StorageError,
 };
 pub use replication::{
     ReplicatedPartitionState, ReplicationCluster, ReplicationConfig, ReplicationError,
@@ -287,9 +287,7 @@ impl PartitionedBroker {
         // Only open directories that already contain segment files — same guard
         // used by `open()` at startup.  This prevents empty "noise" directories
         // from being mistaken for valid partitions.
-        if dir.is_dir()
-            && partition_dir_contains_segment_files(&dir).unwrap_or(false)
-        {
+        if dir.is_dir() && partition_dir_contains_segment_files(&dir).unwrap_or(false) {
             if let Ok(log) = PersistentSegmentLog::open(&dir, self.log_config.clone()) {
                 self.logs.insert(tp.clone(), log);
             }
@@ -366,8 +364,7 @@ impl PartitionedBroker {
                 partition,
             });
         };
-        log.fetch_file_ranges(offset, max_bytes)
-            .map_err(Into::into)
+        log.fetch_file_ranges(offset, max_bytes).map_err(Into::into)
     }
 
     pub fn segment_snapshots(
@@ -528,9 +525,7 @@ impl PartitionedBrokerSharded {
         }
 
         // Slow path: create the partition log and insert it under write lock.
-        let dir = self
-            .data_dir
-            .join(format!("{}-{}", tp.topic, tp.partition));
+        let dir = self.data_dir.join(format!("{}-{}", tp.topic, tp.partition));
         let config = self.log_config.clone();
         let log = tokio::task::spawn_blocking(move || PersistentSegmentLog::open(dir, config))
             .await
@@ -725,7 +720,10 @@ pub async fn run_group_commit_flusher(
 
         for (tp, entries) in by_tp {
             // Obtain (or create) the per-partition lock — fast path: read lock.
-            let lock = match broker.get_or_create_partition(&tp.topic, tp.partition).await {
+            let lock = match broker
+                .get_or_create_partition(&tp.topic, tp.partition)
+                .await
+            {
                 Ok(l) => l,
                 Err(e) => {
                     let msg = format!("{e:?}");
@@ -804,12 +802,7 @@ impl BrokerSharedState {
         data_dir: P,
         log_config: PersistentLogConfig,
     ) -> Result<Self, TransportSharedError> {
-        Self::open_with_security(
-            data_dir,
-            log_config,
-            TransportSecurityConfig::default(),
-        )
-        .await
+        Self::open_with_security(data_dir, log_config, TransportSecurityConfig::default()).await
     }
 
     /// Open a sharded broker state with custom security configuration.
@@ -856,7 +849,10 @@ impl BrokerSharedState {
         // Spawn the group-commit flusher.  Channel capacity = 8×MAX_BATCH so
         // connections are never blocked waiting for the flusher to drain.
         let (group_commit_tx, group_commit_rx) = tokio::sync::mpsc::channel(8 * 4096);
-        tokio::spawn(run_group_commit_flusher(group_commit_rx, Arc::clone(&broker)));
+        tokio::spawn(run_group_commit_flusher(
+            group_commit_rx,
+            Arc::clone(&broker),
+        ));
 
         Ok(Self {
             broker,
