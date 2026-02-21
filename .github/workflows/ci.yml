@@ -26,13 +26,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Resolve project paths
-      id: paths
-      run: |
-        if [[ -d "rafka" ]]; then
-          echo "workdir=rafka" >> "${GITHUB_OUTPUT}"
-        else
-          echo "workdir=." >> "${GITHUB_OUTPUT}"
-        fi
+        id: paths
+        run: |
+          if [[ -d "rafka" ]]; then
+            echo "workdir=rafka" >> "${GITHUB_OUTPUT}"
+          else
+            echo "workdir=." >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -56,29 +56,28 @@ jobs:
         working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-      - name: Run behavior pipeline
+      - name: Regenerate protocol artifacts
         working-directory: ${{ steps.paths.outputs.workdir }}
-        run: ./scripts/check_behavior.sh
+        run: |
+          ./scripts/generate_protocol_registry.sh
+          ./scripts/generate_protocol_messages.sh
 
-      - name: Run E2E transport matrix
+      - name: Run workspace tests
         working-directory: ${{ steps.paths.outputs.workdir }}
-        run: cargo test --locked -p rafka-broker --test transport_integration
+        run: cargo test --workspace --locked
 
-      - name: Run E2E persistent routing
+      - name: Run E2E benchmark smoke
         working-directory: ${{ steps.paths.outputs.workdir }}
-        run: cargo test --locked -p rafka-broker --test persistent_routing
-
-      - name: Run security transport tests
-        working-directory: ${{ steps.paths.outputs.workdir }}
-        run: cargo test --locked -p rafka-broker --test security_transport_integration
-
-      - name: Run async transport tests
-        working-directory: ${{ steps.paths.outputs.workdir }}
-        run: cargo test --locked -p rafka-broker --test async_transport_integration
-
-      - name: Run ACL transport matrix tests
-        working-directory: ${{ steps.paths.outputs.workdir }}
-        run: cargo test --locked -p rafka-broker --test transport_integration transport_acl_
+        run: |
+          cargo run --release -p rafka-broker --bin e2e_bench -- \
+            --mode both \
+            --duration-secs 1 \
+            --target-rates 1000 \
+            --payload-bytes 256 \
+            --workers 1 \
+            --partitions 1 \
+            --pipeline-depth 1 \
+            --records-per-request 1
 
       - name: Verify generated files are up-to-date
         run: |

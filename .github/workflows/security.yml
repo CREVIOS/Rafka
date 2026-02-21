@@ -1,0 +1,51 @@
+name: rafka-security
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 1"
+
+concurrency:
+  group: rafka-security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve project paths
+        id: paths
+        run: |
+          if [[ -d "rafka" ]]; then
+            echo "workdir=rafka" >> "${GITHUB_OUTPUT}"
+          else
+            echo "workdir=." >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ steps.paths.outputs.workdir }} -> target
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo audit
+        working-directory: ${{ steps.paths.outputs.workdir }}
+        run: cargo audit --deny warnings
