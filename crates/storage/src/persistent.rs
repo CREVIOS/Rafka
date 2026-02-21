@@ -247,9 +247,8 @@ impl PersistentSegmentLog {
                     offset: cur_offset,
                     position: cur_log_len,
                 });
-                cur_log_len = cur_log_len.saturating_add(
-                    u64::try_from(frame.len()).unwrap_or(u64::MAX),
-                );
+                cur_log_len =
+                    cur_log_len.saturating_add(u64::try_from(frame.len()).unwrap_or(u64::MAX));
                 log_buf.extend_from_slice(&frame);
                 all_offsets.push(cur_offset);
                 cur_offset += 1;
@@ -516,22 +515,18 @@ impl PersistentSegmentLog {
                 // Parse key_len and value_len from the record header (after the
                 // frame header).
                 let rec_hdr = &hdr[FRAME_HEADER_BYTES..];
-                let key_len = u32::from_be_bytes(
-                    rec_hdr[16..20].try_into().expect("key_len bytes"),
-                ) as u64;
-                let value_len = u32::from_be_bytes(
-                    rec_hdr[20..24].try_into().expect("value_len bytes"),
-                ) as u64;
+                let key_len =
+                    u32::from_be_bytes(rec_hdr[16..20].try_into().expect("key_len bytes")) as u64;
+                let value_len =
+                    u32::from_be_bytes(rec_hdr[20..24].try_into().expect("value_len bytes")) as u64;
 
                 if value_len == 0 {
                     wanted_offset = entry.offset + 1;
                     continue;
                 }
 
-                let value_byte_offset = header_pos
-                    + FRAME_HEADER_BYTES as u64
-                    + RECORD_HEADER_BYTES as u64
-                    + key_len;
+                let value_byte_offset =
+                    header_pos + FRAME_HEADER_BYTES as u64 + RECORD_HEADER_BYTES as u64 + key_len;
 
                 out.push(FileRange {
                     path: segment.log_path.clone(),
@@ -792,7 +787,9 @@ fn read_record_at(file: &File, path: &Path, position: u64) -> Result<Record, Sto
         use std::io::{Read, Seek, SeekFrom};
         // Fallback for non-Unix: seek then read (file must be &mut on Windows).
         // This path is unused on macOS/Linux.
-        let mut f = file.try_clone().map_err(|e| StorageError::io("try_clone", path, e))?;
+        let mut f = file
+            .try_clone()
+            .map_err(|e| StorageError::io("try_clone", path, e))?;
         f.seek(SeekFrom::Start(position))
             .map_err(|err| StorageError::io("seek", path, err))?;
         f.read_exact(&mut frame_header)
@@ -825,7 +822,9 @@ fn read_record_at(file: &File, path: &Path, position: u64) -> Result<Record, Sto
     #[cfg(not(unix))]
     {
         use std::io::{Read, Seek, SeekFrom};
-        let mut f = file.try_clone().map_err(|e| StorageError::io("try_clone", path, e))?;
+        let mut f = file
+            .try_clone()
+            .map_err(|e| StorageError::io("try_clone", path, e))?;
         f.seek(SeekFrom::Start(position + FRAME_HEADER_BYTES as u64))
             .map_err(|err| StorageError::io("seek", path, err))?;
         f.read_exact(&mut payload)

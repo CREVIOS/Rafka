@@ -36,7 +36,9 @@ use std::sync::{Arc, Barrier};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use rafka_broker::{async_transport::AsyncTransportServerSharded, PersistentLogConfig, TransportServer};
+use rafka_broker::{
+    async_transport::AsyncTransportServerSharded, PersistentLogConfig, TransportServer,
+};
 use rafka_protocol::messages::{
     ProduceRequest, ProduceRequestPartitionProduceData, ProduceRequestTopicProduceData,
     VersionedCodec,
@@ -227,7 +229,12 @@ fn run_produce_matrix(config: &BenchConfig) -> Result<(), String> {
         } else {
             run_produce_scenario(config, rate, &dir)?
         };
-        print_stats(BenchMode::Produce.as_str(), rate, config.duration_secs, &stats);
+        print_stats(
+            BenchMode::Produce.as_str(),
+            rate,
+            config.duration_secs,
+            &stats,
+        );
     }
     Ok(())
 }
@@ -261,7 +268,17 @@ fn run_produce_scenario(
         let records_per_request = config.records_per_request;
         let b = Arc::clone(&barrier);
         handles.push(thread::spawn(move || {
-            run_produce_worker(id, rate, timing, payload_bytes, &worker_dir, b, sync, pipeline_depth, records_per_request)
+            run_produce_worker(
+                id,
+                rate,
+                timing,
+                payload_bytes,
+                &worker_dir,
+                b,
+                sync,
+                pipeline_depth,
+                records_per_request,
+            )
         }));
     }
 
@@ -291,8 +308,8 @@ fn run_produce_worker(
 
     let server_handle = thread::spawn(move || server.serve_one_connection());
 
-    let mut stream = TcpStream::connect(addr)
-        .map_err(|e| format!("worker {worker_id} connect: {e}"))?;
+    let mut stream =
+        TcpStream::connect(addr).map_err(|e| format!("worker {worker_id} connect: {e}"))?;
     // TCP_NODELAY prevents Nagle batching from adding latency jitter.
     stream
         .set_nodelay(true)
@@ -323,8 +340,12 @@ fn run_produce_worker(
     let measured_deadline = Duration::from_secs(timing.duration_secs);
     let wall_deadline = warmup_deadline + measured_deadline;
 
-    let capacity = usize::try_from(target_rate.saturating_mul(timing.duration_secs).min(4_000_000))
-        .unwrap_or(4_000_000);
+    let capacity = usize::try_from(
+        target_rate
+            .saturating_mul(timing.duration_secs)
+            .min(4_000_000),
+    )
+    .unwrap_or(4_000_000);
     let mut latencies_ns: Vec<u64> = Vec::with_capacity(capacity);
 
     start_barrier.wait();
@@ -340,7 +361,8 @@ fn run_produce_worker(
             if pacer.elapsed() >= wall_deadline {
                 break;
             }
-            let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
+            let frame =
+                build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
             let t0 = Instant::now();
             stream
                 .write_all(&frame)
@@ -365,7 +387,8 @@ fn run_produce_worker(
 
         // Fill the initial window.
         while in_flight.len() < depth {
-            let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
+            let frame =
+                build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
             stream
                 .write_all(&frame)
                 .map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
@@ -390,7 +413,8 @@ fn run_produce_worker(
             }
 
             // Send the next request to keep the window full.
-            let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
+            let frame =
+                build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
             stream
                 .write_all(&frame)
                 .map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
@@ -427,7 +451,12 @@ fn run_fetch_matrix(config: &BenchConfig) -> Result<(), String> {
         } else {
             run_fetch_scenario(config, rate, &dir)?
         };
-        print_stats(BenchMode::Fetch.as_str(), rate, config.duration_secs, &stats);
+        print_stats(
+            BenchMode::Fetch.as_str(),
+            rate,
+            config.duration_secs,
+            &stats,
+        );
     }
     Ok(())
 }
@@ -485,8 +514,8 @@ fn run_fetch_worker(
         .map_err(|e| format!("worker {worker_id} local_addr: {e:?}"))?;
     let server_handle = thread::spawn(move || server.serve_one_connection());
 
-    let mut stream = TcpStream::connect(addr)
-        .map_err(|e| format!("worker {worker_id} connect: {e}"))?;
+    let mut stream =
+        TcpStream::connect(addr).map_err(|e| format!("worker {worker_id} connect: {e}"))?;
     stream
         .set_nodelay(true)
         .map_err(|e| format!("set_nodelay: {e}"))?;
@@ -515,7 +544,12 @@ fn run_fetch_worker(
     let mut response_buf = [0u8; 4];
 
     for _ in 0..preload_count {
-        let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, preload_corr, &preload_body);
+        let frame = build_request_frame(
+            API_KEY_PRODUCE,
+            PRODUCE_API_VERSION,
+            preload_corr,
+            &preload_body,
+        );
         stream
             .write_all(&frame)
             .map_err(|e| format!("worker {worker_id} preload write: {e}"))?;
@@ -529,8 +563,12 @@ fn run_fetch_worker(
     let measured_deadline = Duration::from_secs(timing.duration_secs);
     let wall_deadline = warmup_deadline + measured_deadline;
 
-    let capacity = usize::try_from(target_rate.saturating_mul(timing.duration_secs).min(4_000_000))
-        .unwrap_or(4_000_000);
+    let capacity = usize::try_from(
+        target_rate
+            .saturating_mul(timing.duration_secs)
+            .min(4_000_000),
+    )
+    .unwrap_or(4_000_000);
     let mut latencies_ns: Vec<u64> = Vec::with_capacity(capacity);
 
     let preload_limit = i64::try_from(preload_count).unwrap_or(i64::MAX);
@@ -549,7 +587,8 @@ fn run_fetch_worker(
 
         // Limit to roughly one record to measure per-record fetch RTT.
         let one_record_bytes = i32::try_from(payload_bytes + 256).unwrap_or(i32::MAX);
-        let fetch_body = encode_fetch_v4_body(BENCH_TOPIC, BENCH_PARTITION, next_offset, one_record_bytes);
+        let fetch_body =
+            encode_fetch_v4_body(BENCH_TOPIC, BENCH_PARTITION, next_offset, one_record_bytes);
         let frame = build_request_frame(API_KEY_FETCH, FETCH_API_VERSION, fetch_corr, &fetch_body);
 
         let t0 = Instant::now();
@@ -613,9 +652,15 @@ fn run_produce_shared_scenario(
 
     let log_config = bench_log_config(config.sync);
     let server = rt
-        .block_on(AsyncTransportServerSharded::bind("127.0.0.1:0", data_dir, log_config))
+        .block_on(AsyncTransportServerSharded::bind(
+            "127.0.0.1:0",
+            data_dir,
+            log_config,
+        ))
         .map_err(|e| format!("shared server bind: {e:?}"))?;
-    let addr = server.local_addr().map_err(|e| format!("local_addr: {e:?}"))?;
+    let addr = server
+        .local_addr()
+        .map_err(|e| format!("local_addr: {e:?}"))?;
 
     // Run the server on a background thread so it processes requests
     // while workers are running.  Workers signal via TCP disconnect when done.
@@ -641,7 +686,17 @@ fn run_produce_shared_scenario(
         };
         let b = Arc::clone(&barrier);
         handles.push(thread::spawn(move || {
-            run_produce_worker_shared(id, rate, timing, payload_bytes, partitions, addr, b, pipeline_depth, records_per_request)
+            run_produce_worker_shared(
+                id,
+                rate,
+                timing,
+                payload_bytes,
+                partitions,
+                addr,
+                b,
+                pipeline_depth,
+                records_per_request,
+            )
         }));
     }
 
@@ -669,8 +724,8 @@ fn run_produce_worker_shared(
     let partition = worker_id as i32 % partitions.max(1) as i32;
     let rpr = records_per_request.max(1);
 
-    let mut stream = TcpStream::connect(addr)
-        .map_err(|e| format!("worker {worker_id} connect: {e}"))?;
+    let mut stream =
+        TcpStream::connect(addr).map_err(|e| format!("worker {worker_id} connect: {e}"))?;
     stream
         .set_nodelay(true)
         .map_err(|e| format!("set_nodelay: {e}"))?;
@@ -697,8 +752,12 @@ fn run_produce_worker_shared(
     let measured_deadline = Duration::from_secs(timing.duration_secs);
     let wall_deadline = warmup_deadline + measured_deadline;
 
-    let capacity = usize::try_from(target_rate.saturating_mul(timing.duration_secs).min(4_000_000))
-        .unwrap_or(4_000_000);
+    let capacity = usize::try_from(
+        target_rate
+            .saturating_mul(timing.duration_secs)
+            .min(4_000_000),
+    )
+    .unwrap_or(4_000_000);
     let mut latencies_ns: Vec<u64> = Vec::with_capacity(capacity);
 
     start_barrier.wait();
@@ -710,34 +769,55 @@ fn run_produce_worker_shared(
 
     if pipeline_depth <= 1 {
         loop {
-            if pacer.elapsed() >= wall_deadline { break; }
-            let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
+            if pacer.elapsed() >= wall_deadline {
+                break;
+            }
+            let frame =
+                build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
             let t0 = Instant::now();
-            stream.write_all(&frame).map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
-            read_response_frame(&mut stream, &mut response_buf).map_err(|e| format!("worker {worker_id} produce read: {e}"))?;
+            stream
+                .write_all(&frame)
+                .map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
+            read_response_frame(&mut stream, &mut response_buf)
+                .map_err(|e| format!("worker {worker_id} produce read: {e}"))?;
             let elapsed_ns = duration_ns(t0.elapsed());
             total_ops += rpr as u64;
             corr_id = corr_id.wrapping_add(1);
-            if pacer.elapsed() >= warmup_deadline { measured_ops += rpr as u64; latencies_ns.push(elapsed_ns); }
+            if pacer.elapsed() >= warmup_deadline {
+                measured_ops += rpr as u64;
+                latencies_ns.push(elapsed_ns);
+            }
             pacer.throttle(total_ops);
         }
     } else {
         let depth = pipeline_depth;
         let mut in_flight: VecDeque<Instant> = VecDeque::with_capacity(depth);
         while in_flight.len() < depth {
-            let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
-            stream.write_all(&frame).map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
+            let frame =
+                build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
+            stream
+                .write_all(&frame)
+                .map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
             in_flight.push_back(Instant::now());
             corr_id = corr_id.wrapping_add(1);
         }
         loop {
-            read_response_frame(&mut stream, &mut response_buf).map_err(|e| format!("worker {worker_id} produce read: {e}"))?;
+            read_response_frame(&mut stream, &mut response_buf)
+                .map_err(|e| format!("worker {worker_id} produce read: {e}"))?;
             let t0 = in_flight.pop_front().expect("in_flight");
             let elapsed_ns = duration_ns(t0.elapsed());
-            if pacer.elapsed() >= warmup_deadline { measured_ops += rpr as u64; latencies_ns.push(elapsed_ns); }
-            if pacer.elapsed() >= wall_deadline { break; }
-            let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
-            stream.write_all(&frame).map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
+            if pacer.elapsed() >= warmup_deadline {
+                measured_ops += rpr as u64;
+                latencies_ns.push(elapsed_ns);
+            }
+            if pacer.elapsed() >= wall_deadline {
+                break;
+            }
+            let frame =
+                build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, corr_id, &produce_body);
+            stream
+                .write_all(&frame)
+                .map_err(|e| format!("worker {worker_id} produce write: {e}"))?;
             in_flight.push_back(Instant::now());
             corr_id = corr_id.wrapping_add(1);
         }
@@ -776,9 +856,15 @@ fn run_fetch_shared_scenario(
 
     let log_config = bench_log_config(config.sync);
     let server = rt
-        .block_on(AsyncTransportServerSharded::bind("127.0.0.1:0", data_dir, log_config))
+        .block_on(AsyncTransportServerSharded::bind(
+            "127.0.0.1:0",
+            data_dir,
+            log_config,
+        ))
         .map_err(|e| format!("shared server bind: {e:?}"))?;
-    let addr = server.local_addr().map_err(|e| format!("local_addr: {e:?}"))?;
+    let addr = server
+        .local_addr()
+        .map_err(|e| format!("local_addr: {e:?}"))?;
 
     // Server runs in background so it can process pre-load produce requests
     // before the timed fetch loop begins.
@@ -805,7 +891,16 @@ fn run_fetch_shared_scenario(
         let pipeline_depth = config.pipeline_depth;
         let b = Arc::clone(&barrier);
         handles.push(thread::spawn(move || {
-            run_fetch_worker_shared(id, rate, timing, payload_bytes, partitions, addr, b, pipeline_depth)
+            run_fetch_worker_shared(
+                id,
+                rate,
+                timing,
+                payload_bytes,
+                partitions,
+                addr,
+                b,
+                pipeline_depth,
+            )
         }));
     }
 
@@ -831,8 +926,8 @@ fn run_fetch_worker_shared(
 ) -> Result<WorkerStats, String> {
     let partition = worker_id as i32 % partitions.max(1) as i32;
 
-    let mut stream = TcpStream::connect(addr)
-        .map_err(|e| format!("worker {worker_id} connect: {e}"))?;
+    let mut stream =
+        TcpStream::connect(addr).map_err(|e| format!("worker {worker_id} connect: {e}"))?;
     stream
         .set_nodelay(true)
         .map_err(|e| format!("set_nodelay: {e}"))?;
@@ -863,7 +958,12 @@ fn run_fetch_worker_shared(
     let mut response_buf = [0u8; 4];
 
     for _ in 0..FETCH_PRELOAD_COUNT {
-        let frame = build_request_frame(API_KEY_PRODUCE, PRODUCE_API_VERSION, preload_corr, &preload_body);
+        let frame = build_request_frame(
+            API_KEY_PRODUCE,
+            PRODUCE_API_VERSION,
+            preload_corr,
+            &preload_body,
+        );
         stream
             .write_all(&frame)
             .map_err(|e| format!("worker {worker_id} preload write: {e}"))?;
@@ -876,8 +976,12 @@ fn run_fetch_worker_shared(
     let measured_deadline = Duration::from_secs(timing.duration_secs);
     let wall_deadline = warmup_deadline + measured_deadline;
 
-    let capacity = usize::try_from(target_rate.saturating_mul(timing.duration_secs).min(4_000_000))
-        .unwrap_or(4_000_000);
+    let capacity = usize::try_from(
+        target_rate
+            .saturating_mul(timing.duration_secs)
+            .min(4_000_000),
+    )
+    .unwrap_or(4_000_000);
     let mut latencies_ns: Vec<u64> = Vec::with_capacity(capacity);
 
     let preload_limit = i64::try_from(FETCH_PRELOAD_COUNT).unwrap_or(i64::MAX);
@@ -898,7 +1002,8 @@ fn run_fetch_worker_shared(
 
             let fetch_body =
                 encode_fetch_v4_body(BENCH_TOPIC, partition, next_offset, one_record_bytes);
-            let frame = build_request_frame(API_KEY_FETCH, FETCH_API_VERSION, fetch_corr, &fetch_body);
+            let frame =
+                build_request_frame(API_KEY_FETCH, FETCH_API_VERSION, fetch_corr, &fetch_body);
 
             let t0 = Instant::now();
             stream
@@ -930,7 +1035,8 @@ fn run_fetch_worker_shared(
         while in_flight.len() < depth {
             let fetch_body =
                 encode_fetch_v4_body(BENCH_TOPIC, partition, next_offset, one_record_bytes);
-            let frame = build_request_frame(API_KEY_FETCH, FETCH_API_VERSION, fetch_corr, &fetch_body);
+            let frame =
+                build_request_frame(API_KEY_FETCH, FETCH_API_VERSION, fetch_corr, &fetch_body);
             stream
                 .write_all(&frame)
                 .map_err(|e| format!("worker {worker_id} fetch pipeline write: {e}"))?;
@@ -962,7 +1068,8 @@ fn run_fetch_worker_shared(
             // Refill the slot.
             let fetch_body =
                 encode_fetch_v4_body(BENCH_TOPIC, partition, next_offset, one_record_bytes);
-            let frame = build_request_frame(API_KEY_FETCH, FETCH_API_VERSION, fetch_corr, &fetch_body);
+            let frame =
+                build_request_frame(API_KEY_FETCH, FETCH_API_VERSION, fetch_corr, &fetch_body);
             stream
                 .write_all(&frame)
                 .map_err(|e| format!("worker {worker_id} fetch pipeline write: {e}"))?;
@@ -996,7 +1103,12 @@ fn run_fetch_worker_shared(
 
 /// Build a complete Kafka request frame:
 /// [4-byte frame_len][api_key][api_version][correlation_id][null client_id][body]
-fn build_request_frame(api_key: i16, api_version: i16, correlation_id: i32, body: &[u8]) -> Vec<u8> {
+fn build_request_frame(
+    api_key: i16,
+    api_version: i16,
+    correlation_id: i32,
+    body: &[u8],
+) -> Vec<u8> {
     // header_version: Produce v3 → 1 (legacy), Fetch v4 → 1 (legacy)
     // null client_id = -1 as i16
     let header: [u8; 10] = {
@@ -1166,8 +1278,7 @@ fn scenario_dir(root: &Path, mode: &str, rate: u64) -> PathBuf {
 
 fn reset_dir(path: &Path) -> Result<(), String> {
     if path.exists() {
-        fs::remove_dir_all(path)
-            .map_err(|e| format!("remove {}: {e}", path.display()))?;
+        fs::remove_dir_all(path).map_err(|e| format!("remove {}: {e}", path.display()))?;
     }
     fs::create_dir_all(path).map_err(|e| format!("create {}: {e}", path.display()))?;
     Ok(())
@@ -1222,15 +1333,24 @@ fn parse_args(args: Vec<String>) -> Result<BenchConfig, String> {
             }
             "--duration-secs" => {
                 i += 1;
-                duration_secs = args.get(i).ok_or("missing duration")?.parse().map_err(|e| format!("{e}"))?;
+                duration_secs = args
+                    .get(i)
+                    .ok_or("missing duration")?
+                    .parse()
+                    .map_err(|e| format!("{e}"))?;
             }
             "--warmup-secs" => {
                 i += 1;
-                warmup_secs = args.get(i).ok_or("missing warmup")?.parse().map_err(|e| format!("{e}"))?;
+                warmup_secs = args
+                    .get(i)
+                    .ok_or("missing warmup")?
+                    .parse()
+                    .map_err(|e| format!("{e}"))?;
             }
             "--target-rates" => {
                 i += 1;
-                target_rates = args.get(i)
+                target_rates = args
+                    .get(i)
                     .ok_or("missing rates")?
                     .split(',')
                     .map(|s| s.trim().parse::<u64>().map_err(|e| format!("{e}")))
@@ -1238,11 +1358,19 @@ fn parse_args(args: Vec<String>) -> Result<BenchConfig, String> {
             }
             "--payload-bytes" => {
                 i += 1;
-                payload_bytes = args.get(i).ok_or("missing bytes")?.parse().map_err(|e| format!("{e}"))?;
+                payload_bytes = args
+                    .get(i)
+                    .ok_or("missing bytes")?
+                    .parse()
+                    .map_err(|e| format!("{e}"))?;
             }
             "--workers" => {
                 i += 1;
-                workers = args.get(i).ok_or("missing workers")?.parse().map_err(|e| format!("{e}"))?;
+                workers = args
+                    .get(i)
+                    .ok_or("missing workers")?
+                    .parse()
+                    .map_err(|e| format!("{e}"))?;
             }
             "--data-dir" => {
                 i += 1;
@@ -1253,17 +1381,33 @@ fn parse_args(args: Vec<String>) -> Result<BenchConfig, String> {
             }
             "--partitions" => {
                 i += 1;
-                partitions = args.get(i).ok_or("missing partitions")?.parse().map_err(|e| format!("{e}"))?;
+                partitions = args
+                    .get(i)
+                    .ok_or("missing partitions")?
+                    .parse()
+                    .map_err(|e| format!("{e}"))?;
             }
             "--pipeline-depth" => {
                 i += 1;
-                pipeline_depth = args.get(i).ok_or("missing pipeline-depth")?.parse().map_err(|e| format!("{e}"))?;
-                if pipeline_depth == 0 { pipeline_depth = 1; }
+                pipeline_depth = args
+                    .get(i)
+                    .ok_or("missing pipeline-depth")?
+                    .parse()
+                    .map_err(|e| format!("{e}"))?;
+                if pipeline_depth == 0 {
+                    pipeline_depth = 1;
+                }
             }
             "--records-per-request" => {
                 i += 1;
-                records_per_request = args.get(i).ok_or("missing records-per-request")?.parse().map_err(|e| format!("{e}"))?;
-                if records_per_request == 0 { records_per_request = 1; }
+                records_per_request = args
+                    .get(i)
+                    .ok_or("missing records-per-request")?
+                    .parse()
+                    .map_err(|e| format!("{e}"))?;
+                if records_per_request == 0 {
+                    records_per_request = 1;
+                }
             }
             other => return Err(format!("unknown argument: {other}")),
         }
