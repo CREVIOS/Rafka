@@ -23,6 +23,13 @@ use crate::{
 /// connection.
 const DEFAULT_MAX_IN_FLIGHT: usize = 16;
 
+type ProducePartitionResult = (i32, i16, i64, i64);
+type ProduceTopicResult = (
+    Option<String>,
+    Option<[u8; 16]>,
+    Vec<ProducePartitionResult>,
+);
+
 pub struct AsyncTransportServer {
     listener: TcpListener,
     state: Arc<Mutex<TransportServer>>,
@@ -342,22 +349,17 @@ async fn writer_task(
         }
 
         // Try to batch more without blocking (drain whatever is already queued).
-        loop {
-            match resp_rx.try_recv() {
-                Ok((sn, r)) => {
-                    pending.insert(sn, r);
-                    while let Some(resp) = pending.remove(&next_expected) {
-                        writer
-                            .write_all(&resp)
-                            .await
-                            .map_err(|err| TransportError::Io {
-                                operation: "writer_write_all",
-                                message: err.to_string(),
-                            })?;
-                        next_expected += 1;
-                    }
-                }
-                Err(_) => break,
+        while let Ok((sn, r)) = resp_rx.try_recv() {
+            pending.insert(sn, r);
+            while let Some(resp) = pending.remove(&next_expected) {
+                writer
+                    .write_all(&resp)
+                    .await
+                    .map_err(|err| TransportError::Io {
+                        operation: "writer_write_all",
+                        message: err.to_string(),
+                    })?;
+                next_expected += 1;
             }
         }
 
@@ -416,6 +418,7 @@ use crate::{BrokerSharedState, TransportSharedError};
 
 /// API key constants (re-declared locally to keep this module self-contained).
 const API_KEY_SHARDED_PRODUCE: i16 = 0;
+const API_KEY_SHARDED_FETCH: i16 = 1;
 
 /// A TCP server that accepts Kafka-protocol connections and dispatches frames
 /// with per-partition concurrency.
@@ -725,8 +728,7 @@ async fn process_task_sharded(
             //    can submit their records into the same flusher batch).
             // Group into the shape encode_sharded_produce_response expects:
             // Vec<(Option<String>, Option<[u8;16]>, Vec<(i32, i16, i64, i64)>)>
-            let mut by_topic: Vec<(Option<String>, Option<[u8; 16]>, Vec<(i32, i16, i64, i64)>)> =
-                Vec::new();
+            let mut by_topic: Vec<ProduceTopicResult> = Vec::new();
             for sub in submissions {
                 let (error_code, base_offset, log_start_offset) = match sub.rx.await {
                     Ok(Ok(offsets)) => {
@@ -757,6 +759,15 @@ async fn process_task_sharded(
             let response_bytes =
                 encode_sharded_produce_response(api_version, api_key, correlation_id, &by_topic)?;
             sharded.metrics.record_api_response(api_key, api_version);
+            (response_bytes, connection_state)
+        } else if api_key == API_KEY_SHARDED_FETCH {
+            // ── Sharded fetch path ───────────────────────────────────────────
+            // Fetch without the global mutex: per-partition locks via
+            // PartitionedBrokerSharded.  Only the target partition(s) are
+            // locked — all others run concurrently.
+            let sharded_clone = sharded.clone();
+            let response_bytes = handle_fetch_sharded(&frame, &sharded_clone).await?;
+            sharded.metrics.record_api_response(api_key, 0); // version recorded inside
             (response_bytes, connection_state)
         } else {
             // Fallback path: global mutex handles coordinators / SASL / etc.
@@ -806,6 +817,169 @@ fn parse_produce_frame_header(frame: &[u8]) -> Result<(i16, i32, &[u8]), Transpo
         return Err(TransportError::Truncated);
     }
     Ok((api_version, correlation_id, &frame[cursor..]))
+}
+
+/// Handle a Fetch request (API key 1) using per-partition sharded locks.
+///
+/// Hot path: parse header → decode FetchRequest → per-partition
+/// `fetch_file_ranges` (only the requested partitions are locked) →
+/// materialise bytes via pread → encode response.
+async fn handle_fetch_sharded(
+    frame: &[u8],
+    sharded: &BrokerSharedState,
+) -> Result<Vec<u8>, TransportError> {
+    use crate::transport::{
+        collect_file_ranges, decode_fetch_request, encode_fetch_response, encode_response_frame,
+        fetch_route_key, map_fetch_partition_error, response_header_version,
+        FetchNodeEndpointResponse, FetchPartitionResponse, FetchTopicResponse, ERROR_NONE,
+        ERROR_TOPIC_AUTHORIZATION_FAILED, ERROR_UNKNOWN_TOPIC_OR_PARTITION, FETCH_MAX_VERSION,
+        FETCH_MIN_VERSION,
+    };
+    use std::sync::Arc;
+
+    let (api_version, correlation_id, body) = parse_produce_frame_header(frame)?;
+
+    if !(FETCH_MIN_VERSION..=FETCH_MAX_VERSION).contains(&api_version) {
+        return Err(TransportError::UnsupportedApiVersion {
+            api_key: API_KEY_SHARDED_FETCH,
+            api_version,
+        });
+    }
+
+    sharded
+        .metrics
+        .record_api_request(API_KEY_SHARDED_FETCH, api_version);
+
+    let (decoded, read) = decode_fetch_request(api_version, body)?;
+    if read != body.len() {
+        return Err(TransportError::InvalidHeader(
+            "fetch request has trailing bytes",
+        ));
+    }
+    let _ = decoded.replica_id;
+
+    let mut topic_responses: Vec<FetchTopicResponse> = Vec::with_capacity(decoded.topics.len());
+
+    for topic in decoded.topics {
+        let route_key = fetch_route_key(api_version, &topic)?;
+        let mut partition_responses: Vec<FetchPartitionResponse> =
+            Vec::with_capacity(topic.partitions.len());
+
+        for partition in topic.partitions {
+            let max_bytes = usize::try_from(partition.partition_max_bytes.max(0)).unwrap_or(0);
+            let fetch_offset = partition.fetch_offset;
+            let partition_idx = partition.partition;
+            let tp_name = route_key.clone();
+
+            let tp = match crate::TopicPartition::new(&tp_name, partition_idx) {
+                Ok(tp) => tp,
+                Err(_) => {
+                    partition_responses.push(FetchPartitionResponse {
+                        partition_index: partition_idx,
+                        error_code: ERROR_TOPIC_AUTHORIZATION_FAILED,
+                        high_watermark: -1,
+                        last_stable_offset: -1,
+                        log_start_offset: -1,
+                        aborted_transactions: None,
+                        preferred_read_replica: -1,
+                        records: None,
+                    });
+                    continue;
+                }
+            };
+
+            let shard = {
+                let map = sharded.broker.shard_map.read().await;
+                match map.get(&tp) {
+                    Some(lock) => Arc::clone(lock),
+                    None => {
+                        partition_responses.push(FetchPartitionResponse {
+                            partition_index: partition_idx,
+                            error_code: ERROR_UNKNOWN_TOPIC_OR_PARTITION,
+                            high_watermark: -1,
+                            last_stable_offset: -1,
+                            log_start_offset: -1,
+                            aborted_transactions: None,
+                            preferred_read_replica: -1,
+                            records: None,
+                        });
+                        continue;
+                    }
+                }
+            };
+
+            // Acquire partition lock and do pread inside spawn_blocking.
+            let fetch_result: Result<(Vec<u8>, i64), crate::PartitionedBrokerError> =
+                tokio::task::spawn_blocking(move || {
+                    let log = shard.blocking_lock();
+                    let high_watermark = log.next_offset();
+                    let ranges = log
+                        .fetch_file_ranges(fetch_offset, max_bytes)
+                        .map_err(crate::PartitionedBrokerError::from)?;
+                    // Release the per-partition lock before pread I/O.
+                    drop(log);
+                    let bytes = collect_file_ranges(&ranges);
+                    Ok((bytes, high_watermark))
+                })
+                .await
+                .map_err(|e| {
+                    crate::PartitionedBrokerError::Storage(crate::StorageError::Io {
+                        operation: "fetch_sharded_spawn_blocking",
+                        path: std::path::PathBuf::new(),
+                        message: e.to_string(),
+                    })
+                })?;
+
+            let part_resp = match fetch_result {
+                Ok((bytes, high_watermark)) => {
+                    sharded.metrics.record_partition_event(
+                        "fetch",
+                        &tp_name,
+                        partition_idx,
+                        bytes.len(),
+                    );
+                    FetchPartitionResponse {
+                        partition_index: partition_idx,
+                        error_code: ERROR_NONE,
+                        high_watermark,
+                        last_stable_offset: high_watermark,
+                        log_start_offset: 0,
+                        aborted_transactions: None,
+                        preferred_read_replica: -1,
+                        records: if bytes.is_empty() { None } else { Some(bytes) },
+                    }
+                }
+                Err(ref err) => FetchPartitionResponse {
+                    partition_index: partition_idx,
+                    error_code: map_fetch_partition_error(err),
+                    high_watermark: -1,
+                    last_stable_offset: -1,
+                    log_start_offset: -1,
+                    aborted_transactions: None,
+                    preferred_read_replica: -1,
+                    records: None,
+                },
+            };
+            partition_responses.push(part_resp);
+        }
+
+        topic_responses.push(FetchTopicResponse {
+            name: topic.name,
+            topic_id: topic.topic_id,
+            partitions: partition_responses,
+        });
+    }
+
+    let body_bytes = encode_fetch_response(
+        api_version,
+        0,
+        0,
+        0,
+        &topic_responses,
+        &[] as &[FetchNodeEndpointResponse],
+    )?;
+    let header_version = response_header_version(API_KEY_SHARDED_FETCH, api_version)?;
+    encode_response_frame(correlation_id, header_version, &body_bytes)
 }
 
 /// Dispatch a Produce frame using per-partition blocking locks from
@@ -875,8 +1049,7 @@ fn dispatch_frame_sharded_blocking(
     // Lock ordering: acquire shard_map (read) → per-partition mutex.
     // For new partitions we upgrade to a write lock, then downgrade back.
 
-    let mut topic_results: Vec<(Option<String>, Option<[u8; 16]>, Vec<(i32, i16, i64, i64)>)> =
-        Vec::with_capacity(decoded.topic_data.len());
+    let mut topic_results: Vec<ProduceTopicResult> = Vec::with_capacity(decoded.topic_data.len());
 
     for topic in decoded.topic_data {
         let topic_name = match &topic.name {
@@ -954,7 +1127,7 @@ fn encode_sharded_produce_response(
     api_version: i16,
     api_key: i16,
     correlation_id: i32,
-    topic_results: &[(Option<String>, Option<[u8; 16]>, Vec<(i32, i16, i64, i64)>)],
+    topic_results: &[ProduceTopicResult],
 ) -> Result<Vec<u8>, TransportError> {
     use crate::transport::{
         encode_produce_response, encode_response_frame, response_header_version,

@@ -149,13 +149,18 @@ impl From<StorageError> for PartitionedBrokerError {
     }
 }
 
+type PendingPartitionEntry = (Vec<u8>, Vec<u8>, i64);
+type PendingPartitionMap = HashMap<TopicPartition, Vec<PendingPartitionEntry>>;
+type PartitionOffsets = HashMap<TopicPartition, Vec<i64>>;
+type PartitionErrorList = Vec<(TopicPartition, PartitionedBrokerError)>;
+
 /// A pending batch of produce records accumulated across one or more
 /// `produce_to` calls.  Call `flush_pending_batch()` to commit the entire
 /// batch with a single `write_all` + optional `sync_data` per partition.
 #[derive(Debug, Default)]
 pub struct PendingWriteBatch {
     /// Per-partition list of `(key, value, timestamp_ms)` entries.
-    by_partition: HashMap<TopicPartition, Vec<(Vec<u8>, Vec<u8>, i64)>>,
+    by_partition: PendingPartitionMap,
     /// Approximate total byte size of all accumulated values.
     pub total_bytes: usize,
 }
@@ -396,12 +401,9 @@ impl PartitionedBroker {
     pub fn flush_pending_batch(
         &mut self,
         batch: PendingWriteBatch,
-    ) -> (
-        HashMap<TopicPartition, Vec<i64>>,
-        Vec<(TopicPartition, PartitionedBrokerError)>,
-    ) {
-        let mut offsets: HashMap<TopicPartition, Vec<i64>> = HashMap::new();
-        let mut errors: Vec<(TopicPartition, PartitionedBrokerError)> = Vec::new();
+    ) -> (PartitionOffsets, PartitionErrorList) {
+        let mut offsets: PartitionOffsets = HashMap::new();
+        let mut errors: PartitionErrorList = Vec::new();
 
         for (tp, entries) in batch.by_partition {
             // Ensure the partition log exists.
@@ -599,6 +601,43 @@ impl PartitionedBrokerSharded {
         .map_err(|e| {
             PartitionedBrokerError::Storage(StorageError::Io {
                 operation: "fetch_async_spawn",
+                path: PathBuf::new(),
+                message: e.to_string(),
+            })
+        })?
+    }
+
+    /// Compute on-disk byte ranges for the *values* of records starting at
+    /// `offset` consuming at most `max_bytes`.  Uses the per-partition async
+    /// mutex — only the target partition is locked; all others are unaffected.
+    pub async fn fetch_file_ranges_for_partition_async(
+        &self,
+        topic: &str,
+        partition: i32,
+        offset: i64,
+        max_bytes: usize,
+    ) -> Result<Vec<FileRange>, PartitionedBrokerError> {
+        let tp = TopicPartition::new(topic, partition)?;
+        let shard = {
+            let map = self.shard_map.read().await;
+            match map.get(&tp) {
+                Some(lock) => Arc::clone(lock),
+                None => {
+                    return Err(PartitionedBrokerError::UnknownPartition {
+                        topic: topic.to_string(),
+                        partition,
+                    })
+                }
+            }
+        };
+        tokio::task::spawn_blocking(move || {
+            let log = shard.blocking_lock();
+            log.fetch_file_ranges(offset, max_bytes).map_err(Into::into)
+        })
+        .await
+        .map_err(|e| {
+            PartitionedBrokerError::Storage(StorageError::Io {
+                operation: "fetch_file_ranges_async_spawn",
                 path: PathBuf::new(),
                 message: e.to_string(),
             })

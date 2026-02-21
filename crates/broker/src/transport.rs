@@ -60,12 +60,12 @@ const API_KEY_SASL_AUTHENTICATE: i16 = 36;
 const API_VERSIONS_RESPONSE_HEADER_VERSION: i16 = 0;
 const DEFAULT_MAX_FRAME_SIZE: usize = 8 * 1024 * 1024;
 
-const ERROR_NONE: i16 = 0;
+pub(crate) const ERROR_NONE: i16 = 0;
 const ERROR_UNKNOWN_SERVER_ERROR: i16 = -1;
 const ERROR_OFFSET_OUT_OF_RANGE: i16 = 1;
-const ERROR_UNKNOWN_TOPIC_OR_PARTITION: i16 = 3;
+pub(crate) const ERROR_UNKNOWN_TOPIC_OR_PARTITION: i16 = 3;
 const ERROR_INVALID_TOPIC_EXCEPTION: i16 = 17;
-const ERROR_TOPIC_AUTHORIZATION_FAILED: i16 = 29;
+pub(crate) const ERROR_TOPIC_AUTHORIZATION_FAILED: i16 = 29;
 const ERROR_GROUP_AUTHORIZATION_FAILED: i16 = 30;
 const ERROR_CLUSTER_AUTHORIZATION_FAILED: i16 = 31;
 const ERROR_UNSUPPORTED_VERSION: i16 = 35;
@@ -88,8 +88,8 @@ const ERROR_UNKNOWN_TOPIC_ID: i16 = 100;
 const ERROR_TRANSACTIONAL_ID_AUTHORIZATION_FAILED: i16 = 53;
 
 const PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION: i16 = 0;
-const FETCH_MIN_VERSION: i16 = 4;
-const FETCH_MAX_VERSION: i16 = 18;
+pub(crate) const FETCH_MIN_VERSION: i16 = 4;
+pub(crate) const FETCH_MAX_VERSION: i16 = 18;
 const JOIN_GROUP_MIN_VERSION: i16 = 0;
 const JOIN_GROUP_MAX_VERSION: i16 = 9;
 const HEARTBEAT_MIN_VERSION: i16 = 0;
@@ -180,7 +180,7 @@ enum ConnectionSecurityState {
 
 #[derive(Debug, Clone)]
 pub struct TransportConnectionState {
-    pub(crate) security: ConnectionSecurityState,
+    security: ConnectionSecurityState,
 }
 
 impl TransportConnectionState {
@@ -884,7 +884,7 @@ impl TransportServer {
                         partition_high_watermark(&mut self.broker, &route_key, partition.partition)
                             .unwrap_or(-1);
 
-                    let partition_response = if !read_committed {
+                    if !read_committed {
                         // Fast path: read value bytes directly from the file.
                         match self.broker.fetch_file_ranges_for_partition(
                             &route_key,
@@ -973,8 +973,7 @@ impl TransportServer {
                                 records: None,
                             },
                         }
-                    };
-                    partition_response
+                    }
                 };
                 self.metrics.record_partition_event(
                     "fetch",
@@ -1985,61 +1984,61 @@ pub(crate) struct ProducePartitionResponse {
 }
 
 #[derive(Debug, Clone)]
-struct FetchRequestBody {
-    replica_id: i32,
-    replica_epoch: Option<i64>,
-    cluster_id: Option<String>,
-    isolation_level: i8,
-    topics: Vec<FetchTopicRequest>,
+pub(crate) struct FetchRequestBody {
+    pub(crate) replica_id: i32,
+    pub(crate) replica_epoch: Option<i64>,
+    pub(crate) cluster_id: Option<String>,
+    pub(crate) isolation_level: i8,
+    pub(crate) topics: Vec<FetchTopicRequest>,
 }
 
 #[derive(Debug, Clone)]
-struct FetchTopicRequest {
-    name: Option<String>,
-    topic_id: Option<[u8; 16]>,
-    partitions: Vec<FetchPartitionRequest>,
+pub(crate) struct FetchTopicRequest {
+    pub(crate) name: Option<String>,
+    pub(crate) topic_id: Option<[u8; 16]>,
+    pub(crate) partitions: Vec<FetchPartitionRequest>,
 }
 
 #[derive(Debug, Clone, Copy)]
-struct FetchPartitionRequest {
-    partition: i32,
-    fetch_offset: i64,
-    partition_max_bytes: i32,
-    replica_directory_id: Option<[u8; 16]>,
-    high_watermark: Option<i64>,
+pub(crate) struct FetchPartitionRequest {
+    pub(crate) partition: i32,
+    pub(crate) fetch_offset: i64,
+    pub(crate) partition_max_bytes: i32,
+    pub(crate) replica_directory_id: Option<[u8; 16]>,
+    pub(crate) high_watermark: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
-struct FetchTopicResponse {
-    name: Option<String>,
-    topic_id: Option<[u8; 16]>,
-    partitions: Vec<FetchPartitionResponse>,
+pub(crate) struct FetchTopicResponse {
+    pub(crate) name: Option<String>,
+    pub(crate) topic_id: Option<[u8; 16]>,
+    pub(crate) partitions: Vec<FetchPartitionResponse>,
 }
 
 #[derive(Debug, Clone)]
-struct FetchPartitionResponse {
-    partition_index: i32,
-    error_code: i16,
-    high_watermark: i64,
-    last_stable_offset: i64,
-    log_start_offset: i64,
-    aborted_transactions: Option<Vec<FetchAbortedTransaction>>,
-    preferred_read_replica: i32,
-    records: Option<Vec<u8>>,
+pub(crate) struct FetchPartitionResponse {
+    pub(crate) partition_index: i32,
+    pub(crate) error_code: i16,
+    pub(crate) high_watermark: i64,
+    pub(crate) last_stable_offset: i64,
+    pub(crate) log_start_offset: i64,
+    pub(crate) aborted_transactions: Option<Vec<FetchAbortedTransaction>>,
+    pub(crate) preferred_read_replica: i32,
+    pub(crate) records: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
-struct FetchAbortedTransaction {
-    producer_id: i64,
-    first_offset: i64,
+pub(crate) struct FetchAbortedTransaction {
+    pub(crate) producer_id: i64,
+    pub(crate) first_offset: i64,
 }
 
 #[derive(Debug, Clone)]
-struct FetchNodeEndpointResponse {
-    node_id: i32,
-    host: String,
-    port: i32,
-    rack: Option<String>,
+pub(crate) struct FetchNodeEndpointResponse {
+    pub(crate) node_id: i32,
+    pub(crate) host: String,
+    pub(crate) port: i32,
+    pub(crate) rack: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -2448,7 +2447,10 @@ fn produce_route_key(
     Ok(topic_id_to_hex(topic_id))
 }
 
-fn fetch_route_key(version: i16, topic: &FetchTopicRequest) -> Result<String, TransportError> {
+pub(crate) fn fetch_route_key(
+    version: i16,
+    topic: &FetchTopicRequest,
+) -> Result<String, TransportError> {
     if version <= 12 {
         return topic
             .name
@@ -2506,7 +2508,7 @@ fn topic_id_to_hex(topic_id: [u8; 16]) -> String {
 ///
 /// On Linux this can be replaced with a `sendfile` loop once the nix crate is
 /// available.  The function signature and call site remain unchanged.
-fn collect_file_ranges(ranges: &[crate::FileRange]) -> Vec<u8> {
+pub(crate) fn collect_file_ranges(ranges: &[crate::FileRange]) -> Vec<u8> {
     use std::fs::File;
     #[cfg(unix)]
     use std::os::unix::fs::FileExt;
@@ -2577,7 +2579,7 @@ fn map_partition_error(err: &PartitionedBrokerError) -> i16 {
     }
 }
 
-fn map_fetch_partition_error(err: &PartitionedBrokerError) -> i16 {
+pub(crate) fn map_fetch_partition_error(err: &PartitionedBrokerError) -> i16 {
     match err {
         PartitionedBrokerError::Storage(StorageError::OffsetOutOfRange { .. }) => {
             ERROR_OFFSET_OUT_OF_RANGE
@@ -3395,7 +3397,7 @@ pub(crate) fn encode_produce_response(
     Ok(out)
 }
 
-fn decode_fetch_request(
+pub(crate) fn decode_fetch_request(
     version: i16,
     input: &[u8],
 ) -> Result<(FetchRequestBody, usize), TransportError> {
@@ -3561,7 +3563,7 @@ fn decode_fetch_request(
     ))
 }
 
-fn encode_fetch_response(
+pub(crate) fn encode_fetch_response(
     version: i16,
     throttle_time_ms: i32,
     top_level_error_code: i16,
