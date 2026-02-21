@@ -1,0 +1,26 @@
+[package]
+name = "rafka-broker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rafka-storage = { path = "../storage" }
+rafka-coordinator = { path = "../coordinator" }
+rafka-protocol = { path = "../protocol" }
+base64 = "0.22"
+hmac = "0.12"
+pbkdf2 = "0.12"
+prometheus = "0.13"
+rand = "0.8"
+rustls = "0.23"
+sha2 = "0.10"
+subtle = "2.6"
+tokio = { version = "1.48", features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync"] }
+
+[[bin]]
+name = "e2e_bench"
+path = "src/bin/e2e_bench.rs"
+
+[dev-dependencies]
+rcgen = "0.13"

@@ -1,0 +1,8 @@
+[package]
+name = "rafka-coordinator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rafka-storage = { path = "../storage" }
