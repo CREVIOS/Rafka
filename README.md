@@ -2,6 +2,19 @@
 
 `rafka` is the Rust rewrite workspace for Apache Kafka replication work.
 
+Planning docs:
+
+- `SPRINT_PLAN.md` - sprint-by-sprint execution plan with quality gates.
+- `TODO.md` - phase-level checklist.
+- `TEST_PLAN.md` - test inventory and execution commands.
+
+CI/CD workflows:
+
+- `.github/workflows/ci.yml` - build, fmt, clippy, behavior tests, and key transport/security matrices.
+- `.github/workflows/extended-tests.yml` - scheduled integration matrix plus optional manual long stress suites.
+- `.github/workflows/perf.yml` - scheduled/manual release-mode perf harness run with CSV artifact upload.
+- `.github/workflows/release.yml` - tag-triggered release checks, binary packaging, and GitHub release publishing.
+
 Current status:
 
 - Workspace and subsystem crates created.
