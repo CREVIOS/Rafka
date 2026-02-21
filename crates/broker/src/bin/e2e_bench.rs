@@ -973,6 +973,12 @@ fn run_fetch_worker_shared(
                 next_offset = 0;
             }
         }
+
+        // Drain responses for any requests still in-flight so the server can
+        // finish its write loop before we send RST via shutdown(Both).
+        while in_flight.pop_front().is_some() {
+            let _ = read_response_frame(&mut stream, &mut response_buf);
+        }
     }
 
     stream

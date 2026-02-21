@@ -626,7 +626,7 @@ async fn handle_connection_sharded(
 async fn process_task_sharded(
     mut frame_rx: mpsc::Receiver<(u64, Vec<u8>)>,
     resp_tx: mpsc::Sender<(u64, Vec<u8>)>,
-    _sharded: Arc<BrokerSharedState>,
+    sharded: Arc<BrokerSharedState>,
     fallback: Arc<Mutex<TransportServer>>,
     mut connection_state: TransportConnectionState,
     group_commit_tx: crate::GroupCommitSender,
@@ -648,6 +648,7 @@ async fn process_task_sharded(
                     Ok(v) => v,
                     Err(e) => return Err(e),
                 };
+            sharded.metrics.record_api_request(api_key, api_version);
 
             // 2. Decode the ProduceRequest.
             let decoded = match ProduceRequest::decode(api_version, body) {
@@ -694,12 +695,16 @@ async fn process_task_sharded(
                     };
 
                     let payload = partition.records.unwrap_or_default();
+                    let payload_len = payload.len();
                     // Priority 1: unpack multi-record batch if present.
                     let records: Vec<(Vec<u8>, Vec<u8>, i64)> =
                         crate::decode_records_batch(payload)
                             .into_iter()
                             .map(|(k, v)| (k, v, timestamp_ms))
                             .collect();
+                    sharded.metrics.record_partition_event(
+                        "produce", &tp_name, partition.index, payload_len,
+                    );
 
                     let (tx, rx) = tokio::sync::oneshot::channel();
                     let entry = crate::GroupCommitEntry {
@@ -754,6 +759,7 @@ async fn process_task_sharded(
             let response_bytes = encode_sharded_produce_response(
                 api_version, api_key, correlation_id, &by_topic,
             )?;
+            sharded.metrics.record_api_response(api_key, api_version);
             (response_bytes, connection_state)
         } else {
             // Fallback path: global mutex handles coordinators / SASL / etc.

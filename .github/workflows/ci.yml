@@ -1,0 +1,68 @@
+name: rafka-ci
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: rafka-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  build-lint-test:
+    name: Build, Lint, and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rafka -> target
+
+      - name: Check formatting
+        working-directory: rafka
+        run: cargo fmt --all -- --check
+
+      - name: Build workspace
+        working-directory: rafka
+        run: cargo build --workspace --locked
+
+      - name: Run clippy (deny warnings)
+        working-directory: rafka
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run behavior pipeline
+        working-directory: rafka
+        run: ./scripts/check_behavior.sh
+
+      - name: Run security transport tests
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test security_transport_integration
+
+      - name: Run async transport tests
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test async_transport_integration
+
+      - name: Run ACL transport matrix tests
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test transport_integration transport_acl_
+
+      - name: Verify generated files are up-to-date
+        run: git -C rafka diff --exit-code

@@ -1,0 +1,93 @@
+name: rafka-extended-tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_stress:
+        description: Run ignored long stress suites
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "0 3 * * *"
+
+concurrency:
+  group: rafka-extended-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  extended:
+    name: Extended integration matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rafka -> target
+
+      - name: Replication integration
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test replication_integration
+
+      - name: Metadata publishing integration
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test metadata_publishing_integration
+
+      - name: Coordinator workload integration
+        working-directory: rafka
+        run: cargo test --locked -p rafka-coordinator --test workload_integration
+
+  stress:
+    name: Long-running stress suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    if: github.event_name == 'workflow_dispatch' && inputs.run_stress
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rafka -> target
+
+      - name: Persistent routing million-record stress
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test persistent_routing -- --ignored stress_one_million_records_across_partitions
+
+      - name: Replication half-million stress
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test replication_integration -- --ignored stress_replication_half_million_records_three_nodes
+
+      - name: Metadata publication million-record stress
+        working-directory: rafka
+        run: cargo test --locked -p rafka-broker --test metadata_publishing_integration -- --ignored stress_metadata_publication_one_million_records_and_failovers
+
+      - name: Coordinator million offset commits stress
+        working-directory: rafka
+        run: cargo test --locked -p rafka-coordinator --test workload_integration -- --ignored stress_million_offset_commits_survive_restart
+
+      - name: Coordinator million churn events stress
+        working-directory: rafka
+        run: cargo test --locked -p rafka-coordinator stress_parallel_consumer_group_churn_million_events -- --ignored

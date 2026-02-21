@@ -1,0 +1,64 @@
+name: rafka-perf
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+concurrency:
+  group: rafka-perf-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  perf-baseline:
+    name: Performance baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rafka -> target
+
+      - name: Run perf harness
+        working-directory: rafka
+        run: |
+          mkdir -p perf-artifacts
+          ./scripts/run_perf_harness.sh \
+            --mode both \
+            --duration-secs 10 \
+            --target-rates 1000,10000,100000,1000000 \
+            --payload-bytes 1024 | tee perf-artifacts/perf.csv
+
+      - name: Publish job summary
+        working-directory: rafka
+        run: |
+          {
+            echo "### Rafka perf baseline"
+            echo
+            echo '```csv'
+            cat perf-artifacts/perf.csv
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload perf artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rafka-perf-results
+          path: rafka/perf-artifacts/
+          retention-days: 14

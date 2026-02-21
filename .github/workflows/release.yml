@@ -1,0 +1,75 @@
+name: rafka-release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  release:
+    name: Build and publish release artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rafka -> target
+
+      - name: Run release quality checks
+        working-directory: rafka
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          ./scripts/check_behavior.sh
+
+      - name: Build release binaries
+        working-directory: rafka
+        run: cargo build --workspace --bins --release --locked
+
+      - name: Package release artifacts
+        working-directory: rafka
+        run: |
+          mkdir -p dist
+          for bin in perf_harness e2e_bench; do
+            if [[ -f "target/release/${bin}" ]]; then
+              cp "target/release/${bin}" "dist/${bin}"
+            fi
+          done
+          if [[ -z "$(ls -A dist)" ]]; then
+            echo "No release binaries found in target/release"
+            exit 1
+          fi
+          tar -czf "dist/rafka-${{ github.ref_name }}-linux-amd64.tar.gz" -C dist .
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rafka-release-${{ github.ref_name }}
+          path: rafka/dist/
+          retention-days: 30
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rafka/dist/*.tar.gz
+          generate_release_notes: true
