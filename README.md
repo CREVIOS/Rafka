@@ -10,10 +10,11 @@ Planning docs:
 
 CI/CD workflows:
 
-- `.github/workflows/ci.yml` - build, fmt, clippy, behavior tests, and key transport/security matrices.
-- `.github/workflows/extended-tests.yml` - scheduled integration matrix plus optional manual long stress suites.
+- `.github/workflows/ci.yml` - build, fmt, clippy, protocol generation checks, full workspace tests, and `e2e_bench` smoke.
+- `.github/workflows/extended-tests.yml` - scheduled extended e2e integration matrix plus optional manual long stress suites.
 - `.github/workflows/perf.yml` - scheduled/manual release-mode perf harness run with CSV artifact upload.
 - `.github/workflows/release.yml` - tag-triggered release checks, binary packaging, and GitHub release publishing.
+- `.github/workflows/security.yml` - scheduled/manual/pull-request dependency vulnerability scan via `cargo audit`.
 
 Current status:
 
