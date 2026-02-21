@@ -26,17 +26,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve project paths
+        id: paths
+        run: |
+          if [[ -d "rafka" ]]; then
+            echo "workdir=rafka" >> "${GITHUB_OUTPUT}"
+            echo "artifact_prefix=rafka/" >> "${GITHUB_OUTPUT}"
+          else
+            echo "workdir=." >> "${GITHUB_OUTPUT}"
+            echo "artifact_prefix=" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            rafka -> target
+          workspaces: ${{ steps.paths.outputs.workdir }} -> target
 
       - name: Run perf harness
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: |
           mkdir -p perf-artifacts
           ./scripts/run_perf_harness.sh \
@@ -46,7 +56,7 @@ jobs:
             --payload-bytes 1024 | tee perf-artifacts/perf.csv
 
       - name: Publish job summary
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: |
           {
             echo "### Rafka perf baseline"
@@ -60,5 +70,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rafka-perf-results
-          path: rafka/perf-artifacts/
+          path: ${{ steps.paths.outputs.artifact_prefix }}perf-artifacts/
           retention-days: 14

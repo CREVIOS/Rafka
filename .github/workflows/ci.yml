@@ -25,6 +25,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve project paths
+      id: paths
+      run: |
+        if [[ -d "rafka" ]]; then
+          echo "workdir=rafka" >> "${GITHUB_OUTPUT}"
+        else
+          echo "workdir=." >> "${GITHUB_OUTPUT}"
+        fi
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -33,36 +42,48 @@ jobs:
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            rafka -> target
+          workspaces: ${{ steps.paths.outputs.workdir }} -> target
 
       - name: Check formatting
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo fmt --all -- --check
 
       - name: Build workspace
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo build --workspace --locked
 
       - name: Run clippy (deny warnings)
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Run behavior pipeline
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: ./scripts/check_behavior.sh
 
+      - name: Run E2E transport matrix
+        working-directory: ${{ steps.paths.outputs.workdir }}
+        run: cargo test --locked -p rafka-broker --test transport_integration
+
+      - name: Run E2E persistent routing
+        working-directory: ${{ steps.paths.outputs.workdir }}
+        run: cargo test --locked -p rafka-broker --test persistent_routing
+
       - name: Run security transport tests
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo test --locked -p rafka-broker --test security_transport_integration
 
       - name: Run async transport tests
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo test --locked -p rafka-broker --test async_transport_integration
 
       - name: Run ACL transport matrix tests
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo test --locked -p rafka-broker --test transport_integration transport_acl_
 
       - name: Verify generated files are up-to-date
-        run: git -C rafka diff --exit-code
+        run: |
+          if [[ "${{ steps.paths.outputs.workdir }}" == "." ]]; then
+            git diff --exit-code
+          else
+            git -C "${{ steps.paths.outputs.workdir }}" diff --exit-code
+          fi

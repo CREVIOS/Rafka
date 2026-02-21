@@ -23,6 +23,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve project paths
+        id: paths
+        run: |
+          if [[ -d "rafka" ]]; then
+            echo "workdir=rafka" >> "${GITHUB_OUTPUT}"
+            echo "artifact_prefix=rafka/" >> "${GITHUB_OUTPUT}"
+          else
+            echo "workdir=." >> "${GITHUB_OUTPUT}"
+            echo "artifact_prefix=" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -31,22 +42,34 @@ jobs:
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            rafka -> target
+          workspaces: ${{ steps.paths.outputs.workdir }} -> target
 
       - name: Run release quality checks
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: |
           cargo fmt --all -- --check
           cargo clippy --workspace --all-targets --locked -- -D warnings
           ./scripts/check_behavior.sh
 
       - name: Build release binaries
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: cargo build --workspace --bins --release --locked
 
+      - name: Run E2E benchmark smoke test
+        working-directory: ${{ steps.paths.outputs.workdir }}
+        run: |
+          cargo run --release -p rafka-broker --bin e2e_bench -- \
+            --mode both \
+            --duration-secs 1 \
+            --target-rates 1000 \
+            --payload-bytes 256 \
+            --workers 1 \
+            --partitions 1 \
+            --pipeline-depth 1 \
+            --records-per-request 1
+
       - name: Package release artifacts
-        working-directory: rafka
+        working-directory: ${{ steps.paths.outputs.workdir }}
         run: |
           mkdir -p dist
           for bin in perf_harness e2e_bench; do
@@ -64,12 +87,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rafka-release-${{ github.ref_name }}
-          path: rafka/dist/
+          path: ${{ steps.paths.outputs.artifact_prefix }}dist/
           retention-days: 30
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: rafka/dist/*.tar.gz
+          files: ${{ steps.paths.outputs.artifact_prefix }}dist/*.tar.gz
           generate_release_notes: true
