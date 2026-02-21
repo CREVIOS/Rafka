@@ -1,0 +1,190 @@
+# Research Sources Used Before Implementation
+
+These are the primary references used before adding new protocol/storage logic.
+
+## Kafka
+
+- Kafka protocol overview:
+  - https://kafka.apache.org/protocol
+- Kafka protocol reference (current versioned docs):
+  - https://kafka.apache.org/40/protocol.html
+- Kafka protocol primitive encoding reference:
+  - https://kafka.apache.org/24/generated/protocol_types.html
+- Kafka authorization and ACL operation references:
+  - https://kafka.apache.org/documentation/#security_authz
+  - https://kafka.apache.org/26/generated/authorization_api.html
+- Kafka message format implementation notes:
+  - `docs/implementation/message-format.md`
+- Kafka log file naming and segment file conventions:
+  - `storage/src/main/java/org/apache/kafka/storage/internals/log/LogFileUtils.java`
+- Kafka local storage behavior (append, read, flush, directory semantics):
+  - `storage/src/main/java/org/apache/kafka/storage/internals/log/LocalLog.java`
+- Kafka segment/index behavior:
+  - `storage/src/main/java/org/apache/kafka/storage/internals/log/LogSegment.java`
+  - `storage/src/main/java/org/apache/kafka/storage/internals/log/OffsetIndex.java`
+- Kafka storage recovery tests:
+  - `storage/src/test/java/org/apache/kafka/storage/internals/log/LocalLogTest.java`
+  - `storage/src/test/java/org/apache/kafka/storage/internals/log/LogSegmentTest.java`
+- Kafka request/response behavior tests used for Rust parity porting:
+  - `clients/src/test/java/org/apache/kafka/common/requests/RequestResponseTest.java`
+  - `clients/src/test/java/org/apache/kafka/common/requests/ApiVersionsResponseTest.java`
+  - `clients/src/test/java/org/apache/kafka/common/requests/ProduceResponseTest.java`
+  - `clients/src/test/java/org/apache/kafka/common/requests/ProduceRequestTest.java`
+  - `clients/src/test/java/org/apache/kafka/common/requests/FetchRequestTest.java`
+  - `clients/src/test/java/org/apache/kafka/clients/consumer/internals/FetchRequestManagerTest.java`
+  - `core/src/test/scala/unit/kafka/server/AbstractFetcherThreadTest.scala`
+  - `core/src/test/scala/kafka/server/LocalLeaderEndPointTest.scala`
+- Kafka network/server transport implementation references used for async transport alignment:
+  - `core/src/main/scala/kafka/network/SocketServer.scala`
+  - `core/src/main/scala/kafka/server/KafkaRequestHandler.scala`
+  - `core/src/test/scala/unit/kafka/network/SocketServerTest.scala`
+  - `core/src/test/scala/unit/kafka/network/ProcessorTest.scala`
+- Kafka message generator behavior:
+  - `generator/src/main/java/org/apache/kafka/message/MessageDataGenerator.java`
+- Kafka varint/varlong implementation:
+  - `clients/src/main/java/org/apache/kafka/common/utils/ByteUtils.java`
+- Kafka varint/varlong compatibility vectors:
+  - `clients/src/test/java/org/apache/kafka/common/utils/ByteUtilsTest.java`
+- Kafka source message schemas:
+  - `clients/src/main/resources/common/message/ApiVersionsRequest.json`
+  - `clients/src/main/resources/common/message/ApiVersionsResponse.json`
+  - `clients/src/main/resources/common/message/OffsetCommitRequest.json`
+  - `clients/src/main/resources/common/message/OffsetCommitResponse.json`
+  - `clients/src/main/resources/common/message/OffsetFetchRequest.json`
+  - `clients/src/main/resources/common/message/OffsetFetchResponse.json`
+  - `clients/src/main/resources/common/message/JoinGroupRequest.json`
+  - `clients/src/main/resources/common/message/JoinGroupResponse.json`
+  - `clients/src/main/resources/common/message/SyncGroupRequest.json`
+  - `clients/src/main/resources/common/message/SyncGroupResponse.json`
+  - `clients/src/main/resources/common/message/HeartbeatRequest.json`
+  - `clients/src/main/resources/common/message/HeartbeatResponse.json`
+  - `clients/src/main/resources/common/message/LeaveGroupRequest.json`
+  - `clients/src/main/resources/common/message/LeaveGroupResponse.json`
+  - `clients/src/main/resources/common/message/FetchRequest.json`
+  - `clients/src/main/resources/common/message/FetchResponse.json`
+  - `clients/src/main/resources/common/message/ProduceRequest.json`
+  - `clients/src/main/resources/common/message/ProduceResponse.json`
+  - `clients/src/main/resources/common/message/InitProducerIdRequest.json`
+  - `clients/src/main/resources/common/message/InitProducerIdResponse.json`
+  - `clients/src/main/resources/common/message/EndTxnRequest.json`
+  - `clients/src/main/resources/common/message/EndTxnResponse.json`
+  - `clients/src/main/resources/common/message/WriteTxnMarkersRequest.json`
+  - `clients/src/main/resources/common/message/WriteTxnMarkersResponse.json`
+  - `clients/src/main/resources/common/message/SaslHandshakeRequest.json`
+  - `clients/src/main/resources/common/message/SaslHandshakeResponse.json`
+  - `clients/src/main/resources/common/message/SaslAuthenticateRequest.json`
+  - `clients/src/main/resources/common/message/SaslAuthenticateResponse.json`
+  - `clients/src/main/resources/common/message/RequestHeader.json`
+  - `clients/src/main/resources/common/message/ResponseHeader.json`
+- Kafka coordinator/server behavior references for offset parity:
+  - `core/src/main/scala/kafka/server/KafkaApis.scala`
+  - `core/src/main/scala/kafka/server/AuthHelper.scala`
+  - `clients/src/main/java/org/apache/kafka/common/protocol/Errors.java`
+  - `core/src/test/scala/unit/kafka/server/OffsetCommitRequestTest.scala`
+  - `core/src/test/scala/unit/kafka/server/OffsetFetchRequestTest.scala`
+  - `core/src/test/scala/unit/kafka/server/GroupCoordinatorBaseRequestTest.scala`
+- Kafka coordinator/server behavior references for classic group rebalance parity:
+  - `core/src/test/scala/unit/kafka/server/JoinGroupRequestTest.scala`
+  - `core/src/test/scala/unit/kafka/server/SyncGroupRequestTest.scala`
+  - `core/src/test/scala/unit/kafka/server/HeartbeatRequestTest.scala`
+  - `core/src/test/scala/unit/kafka/server/LeaveGroupRequestTest.scala`
+- Kafka transaction wire behavior references for request/response compatibility:
+  - `clients/src/test/java/org/apache/kafka/common/requests/EndTxnRequestTest.java`
+  - `clients/src/test/java/org/apache/kafka/common/requests/WriteTxnMarkersRequestTest.java`
+  - `core/src/test/scala/unit/kafka/server/WriteTxnMarkersRequestTest.scala`
+- Kafka KIP references for flexible versions and tagged fields:
+  - https://cwiki.apache.org/confluence/display/KAFKA/KIP-482%3A%2BThe%2BKafka%2BProtocol%2Bshould%2BSupport%2BOptional%2BTagged%2BFields
+- Kafka KIP references used for Fetch v15-v18 field gates:
+  - https://cwiki.apache.org/confluence/display/KAFKA/KIP-951%3A%2BLeader%2Bdiscovery%2Boptimizations%2Bfor%2Bthe%2Bconsumer%2Brebalance%2Bprotocol
+  - https://cwiki.apache.org/confluence/display/KAFKA/KIP-1166%3A%2BConsumer-reported+high-watermark+in+FetchRequest
+  - https://mail-archive.com/dev@kafka.apache.org/msg82362.html
+  - https://cwiki.apache.org/confluence/display/KAFKA/KIP-853%3A+KRaft+Controller+Operation+Routing
+- Kafka KRaft design and metadata references:
+  - https://cwiki.apache.org/confluence/display/KAFKA/KIP-595%3A+A+Raft+Protocol+for+the+Metadata+Quorum
+  - https://cwiki.apache.org/confluence/display/KAFKA/KIP-630%3A+Kafka+Raft+Snapshot
+  - https://kafka.apache.org/documentation/#kraft
+- Kafka KRaft implementation sources used for metadata and leader/ISR modeling:
+  - `raft/src/main/java/org/apache/kafka/raft/FollowerState.java`
+  - `raft/src/main/java/org/apache/kafka/raft/ElectionState.java`
+  - `raft/src/main/java/org/apache/kafka/raft/FileQuorumStateStore.java`
+  - `metadata/src/main/java/org/apache/kafka/metadata/LeaderAndIsr.java`
+  - `metadata/src/main/java/org/apache/kafka/metadata/KRaftMetadataCache.java`
+  - `metadata/src/main/java/org/apache/kafka/image/publisher/MetadataPublisher.java`
+- Kafka generated header/message-type mappings used for version gates:
+  - `clients/build/generated/main/java/org/apache/kafka/common/message/ApiMessageType.java`
+  - `clients/build/generated/main/java/org/apache/kafka/common/message/RequestHeaderData.java`
+  - `clients/build/generated/main/java/org/apache/kafka/common/message/ResponseHeaderData.java`
+
+## Rust best practices
+
+- Rust API Guidelines:
+  - https://rust-lang.github.io/api-guidelines/
+  - https://rust-lang.github.io/api-guidelines/checklist.html
+- Rust Book:
+  - https://doc.rust-lang.org/book/
+- Rust Book testing chapter:
+  - https://doc.rust-lang.org/book/ch11-00-testing.html
+- Rust by Example testing:
+  - https://doc.rust-lang.org/rust-by-example/testing.html
+- Clippy lint collection:
+  - https://doc.rust-lang.org/clippy/
+- Cargo Book:
+  - https://doc.rust-lang.org/cargo/
+- Cargo build scripts:
+  - https://doc.rust-lang.org/cargo/reference/build-scripts.html
+- Rust std `OpenOptions`:
+  - https://doc.rust-lang.org/std/fs/struct.OpenOptions.html
+- Rust std `File::sync_data`:
+  - https://doc.rust-lang.org/std/fs/struct.File.html#method.sync_data
+- Rust std `File::set_len`:
+  - https://doc.rust-lang.org/std/fs/struct.File.html#method.set_len
+- Rust std `Read::read_exact`:
+  - https://doc.rust-lang.org/std/io/trait.Read.html#method.read_exact
+- Rust std `TcpListener` and `TcpStream`:
+  - https://doc.rust-lang.org/std/net/struct.TcpListener.html
+  - https://doc.rust-lang.org/std/net/struct.TcpStream.html
+- Tokio async I/O transport references:
+  - https://docs.rs/tokio/latest/tokio/net/struct.TcpListener.html
+  - https://docs.rs/tokio/latest/tokio/net/struct.TcpStream.html
+  - https://docs.rs/tokio/latest/tokio/io/trait.AsyncReadExt.html
+  - https://docs.rs/tokio/latest/tokio/io/trait.AsyncWriteExt.html
+  - https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html
+  - https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html
+  - https://tokio.rs/tokio/tutorial/spawning
+- Rustls TLS APIs:
+  - https://docs.rs/rustls/latest/rustls/
+  - https://docs.rs/rustls/latest/rustls/struct.ServerConnection.html
+  - https://docs.rs/rustls/latest/rustls/struct.StreamOwned.html
+- Rust std threading and synchronization:
+  - https://doc.rust-lang.org/std/thread/
+  - https://doc.rust-lang.org/std/sync/struct.Mutex.html
+  - https://doc.rust-lang.org/std/sync/struct.Arc.html
+- Rust testing patterns and benchmarking references:
+  - https://doc.rust-lang.org/book/ch11-00-testing.html
+  - https://docs.rs/proptest/latest/proptest/
+  - https://docs.rs/criterion/latest/criterion/
+  - https://bheisler.github.io/criterion.rs/book/getting_started.html
+  - https://doc.rust-lang.org/cargo/commands/cargo-bench.html
+- Rust performance/concurrency references:
+  - https://nnethercote.github.io/perf-book/
+  - https://tokio.rs/tokio/tutorial/spawning
+  - https://doc.rust-lang.org/std/time/struct.Instant.html
+- Rust std `Seek`:
+  - https://doc.rust-lang.org/std/io/trait.Seek.html
+- Rust std `Cow` for borrow/own trade-offs:
+  - https://doc.rust-lang.org/std/borrow/enum.Cow.html
+- Rust std `Cursor` for byte-oriented codecs:
+  - https://doc.rust-lang.org/std/io/struct.Cursor.html
+- JSONC parser docs (for Kafka JSON files with comments):
+  - https://docs.rs/jsonc-parser/latest/jsonc_parser/fn.parse_to_serde_value.html
+- Prometheus Rust crate docs:
+  - https://docs.rs/prometheus/latest/prometheus/
+- SCRAM protocol references:
+  - https://datatracker.ietf.org/doc/html/rfc5802
+  - https://datatracker.ietf.org/doc/html/rfc7677
+- Downloaded local best-practice handbook:
+  - `rust-best-practices-main/README.md`
+  - `rust-best-practices-main/book/chapter_01.md`
+  - `rust-best-practices-main/book/chapter_02.md`
+  - `rust-best-practices-main/book/chapter_04.md`
+  - `rust-best-practices-main/book/chapter_05.md`
