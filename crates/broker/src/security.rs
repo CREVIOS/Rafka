@@ -7,7 +7,8 @@ use base64::Engine as _;
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2_hmac;
 use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::TryRngCore;
+
 use sha2::{Digest, Sha256, Sha512};
 use subtle::ConstantTimeEq;
 
@@ -447,7 +448,9 @@ fn authenticate_scram_first(
     };
 
     let mut nonce_suffix = [0_u8; 18];
-    OsRng.fill_bytes(&mut nonce_suffix);
+    OsRng
+        .try_fill_bytes(&mut nonce_suffix)
+        .expect("os entropy for scram nonce");
     let combined_nonce = format!("{client_nonce}{}", STANDARD_NO_PAD.encode(nonce_suffix));
     let server_first = format!(
         "r={combined_nonce},s={},i={}",
