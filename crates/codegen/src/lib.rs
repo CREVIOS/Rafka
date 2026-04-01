@@ -568,8 +568,12 @@ mod tests {
     use super::*;
 
     fn specs_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../clients/src/main/resources/common/message")
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let vendored = manifest.join("../../specs/kafka");
+        if vendored.is_dir() {
+            return vendored;
+        }
+        manifest.join("../../../clients/src/main/resources/common/message")
     }
 
     #[test]

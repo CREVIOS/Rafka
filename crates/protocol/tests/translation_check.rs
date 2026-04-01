@@ -18,8 +18,12 @@ use rafka_protocol::messages::{
 use rafka_protocol::ProtocolError;
 
 fn specs_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../clients/src/main/resources/common/message")
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let vendored = manifest.join("../../specs/kafka");
+    if vendored.is_dir() {
+        return vendored;
+    }
+    manifest.join("../../../clients/src/main/resources/common/message")
 }
 
 fn find_spec<'a>(specs: &'a [ProtocolMessageSpec], name: &str) -> &'a ProtocolMessageSpec {
