@@ -20,7 +20,10 @@ else
 fi
 
 OUTPUT_FILE="${RAFKA_DIR}/crates/protocol/src/generated_messages.rs"
-TARGETS="ApiVersionsRequest,ApiVersionsResponse,ProduceRequest,OffsetCommitRequest,OffsetCommitResponse,OffsetFetchRequest,OffsetFetchResponse,JoinGroupRequest,JoinGroupResponse,SyncGroupRequest,SyncGroupResponse,HeartbeatRequest,HeartbeatResponse,LeaveGroupRequest,LeaveGroupResponse,SaslHandshakeRequest,SaslHandshakeResponse,SaslAuthenticateRequest,SaslAuthenticateResponse"
+TARGETS="ApiVersionsRequest,ApiVersionsResponse,ProduceRequest,OffsetCommitRequest,OffsetCommitResponse,OffsetFetchRequest,OffsetFetchResponse,JoinGroupRequest,JoinGroupResponse,SyncGroupRequest,SyncGroupResponse,HeartbeatRequest,HeartbeatResponse,LeaveGroupRequest,LeaveGroupResponse,SaslHandshakeRequest,SaslHandshakeResponse,SaslAuthenticateRequest,SaslAuthenticateResponse,DeleteGroupsRequest,DeleteGroupsResponse,ListGroupsRequest,ListGroupsResponse"
+
+CODECS_FILE="${RAFKA_DIR}/crates/protocol/src/generated_codecs.rs"
+CODEC_TARGETS="DeleteGroupsRequest,DeleteGroupsResponse,ListGroupsRequest,ListGroupsResponse"
 
 : "${CARGO_HOME:=${RAFKA_DIR}/.cargo-home}"
 : "${CARGO_TARGET_DIR:=${RAFKA_DIR}/target}"
@@ -30,4 +33,6 @@ export CARGO_TARGET_DIR
 cargo run -p rafka-codegen -- \
   --input "${INPUT_DIR}" \
   --messages-output "${OUTPUT_FILE}" \
-  --targets "${TARGETS}"
+  --targets "${TARGETS}" \
+  --codecs-output "${CODECS_FILE}" \
+  --codec-targets "${CODEC_TARGETS}"
