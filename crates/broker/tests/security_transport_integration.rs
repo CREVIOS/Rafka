@@ -78,35 +78,15 @@ fn log_config() -> PersistentLogConfig {
 
 fn request_header_version(api_key: i16, api_version: i16) -> i16 {
     match api_key {
-        API_KEY_API_VERSIONS => {
-            if api_version >= 3 {
-                2
-            } else {
-                1
-            }
-        }
-        API_KEY_PRODUCE => {
-            if api_version >= 9 {
-                2
-            } else {
-                1
-            }
-        }
-        API_KEY_HEARTBEAT => {
-            if api_version >= 4 {
-                2
-            } else {
-                1
-            }
-        }
+        API_KEY_API_VERSIONS if api_version >= 3 => 2,
+        API_KEY_API_VERSIONS => 1,
+        API_KEY_PRODUCE if api_version >= 9 => 2,
+        API_KEY_PRODUCE => 1,
+        API_KEY_HEARTBEAT if api_version >= 4 => 2,
+        API_KEY_HEARTBEAT => 1,
         API_KEY_SASL_HANDSHAKE => 1,
-        API_KEY_SASL_AUTHENTICATE => {
-            if api_version >= 2 {
-                2
-            } else {
-                1
-            }
-        }
+        API_KEY_SASL_AUTHENTICATE if api_version >= 2 => 2,
+        API_KEY_SASL_AUTHENTICATE => 1,
         _ => 1,
     }
 }
@@ -114,28 +94,13 @@ fn request_header_version(api_key: i16, api_version: i16) -> i16 {
 fn response_header_version(api_key: i16, api_version: i16) -> i16 {
     match api_key {
         API_KEY_API_VERSIONS => 0,
-        API_KEY_PRODUCE => {
-            if api_version >= 9 {
-                1
-            } else {
-                0
-            }
-        }
-        API_KEY_HEARTBEAT => {
-            if api_version >= 4 {
-                1
-            } else {
-                0
-            }
-        }
+        API_KEY_PRODUCE if api_version >= 9 => 1,
+        API_KEY_PRODUCE => 0,
+        API_KEY_HEARTBEAT if api_version >= 4 => 1,
+        API_KEY_HEARTBEAT => 0,
         API_KEY_SASL_HANDSHAKE => 0,
-        API_KEY_SASL_AUTHENTICATE => {
-            if api_version >= 2 {
-                1
-            } else {
-                0
-            }
-        }
+        API_KEY_SASL_AUTHENTICATE if api_version >= 2 => 1,
+        API_KEY_SASL_AUTHENTICATE => 0,
         _ => 0,
     }
 }
