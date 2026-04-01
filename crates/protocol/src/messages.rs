@@ -4,6 +4,8 @@ use crate::ProtocolError;
 
 include!("generated_messages.rs");
 
+include!("generated_codecs.rs");
+
 pub const API_VERSIONS_MIN_VERSION: i16 = 0;
 pub const API_VERSIONS_MAX_VERSION: i16 = 4;
 pub const API_VERSIONS_FIRST_FLEXIBLE_VERSION: i16 = 3;

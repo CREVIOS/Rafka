@@ -307,3 +307,41 @@ pub struct SaslAuthenticateResponse {
     pub session_lifetime_ms: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeleteGroupsRequest {
+    pub groups_names: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeleteGroupsResponse {
+    pub throttle_time_ms: i32,
+    pub results: Vec<DeleteGroupsResponseDeletableGroupResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeleteGroupsResponseDeletableGroupResult {
+    pub group_id: String,
+    pub error_code: i16,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListGroupsRequest {
+    pub states_filter: Option<Vec<String>>,
+    pub types_filter: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListGroupsResponse {
+    pub throttle_time_ms: Option<i32>,
+    pub error_code: i16,
+    pub groups: Vec<ListGroupsResponseListedGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListGroupsResponseListedGroup {
+    pub group_id: String,
+    pub protocol_type: String,
+    pub group_state: Option<String>,
+    pub group_type: Option<String>,
+}
+
