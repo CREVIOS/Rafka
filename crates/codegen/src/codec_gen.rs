@@ -107,7 +107,7 @@ fn read_call(kind: &WireScalar) -> &'static str {
 
 fn write_call(kind: &WireScalar, value: &str) -> String {
     match kind {
-        WireScalar::I8 => format!("write_i8(&mut out, {value})?;"),
+        WireScalar::I8 => format!("write_i8(&mut out, {value});"),
         WireScalar::I16 => format!("write_i16(&mut out, {value});"),
         WireScalar::U16 => format!("write_u16(&mut out, {value});"),
         WireScalar::U32 => format!("write_u32(&mut out, {value});"),
@@ -280,7 +280,7 @@ fn emit_field_encode(
             let value = if optional {
                 match kind {
                     WireScalar::Bool => format!("{accessor}.unwrap_or(false)"),
-                    WireScalar::Uuid => format!("*{accessor}.as_ref().unwrap_or(&[0_u8; 16])"),
+                    WireScalar::Uuid => format!("{accessor}.as_ref().unwrap_or(&[0_u8; 16])"),
                     _ => format!(
                         "{accessor}.ok_or(ProtocolError::MissingRequiredField(\"{label}\"))?"
                     ),
@@ -338,7 +338,7 @@ fn emit_array_encode(
                 )));
             };
             let call = match kind {
-                WireScalar::I8 => "write_i8(&mut out, *item)?;".to_string(),
+                WireScalar::I8 => "write_i8(&mut out, *item);".to_string(),
                 WireScalar::I16 => "write_i16(&mut out, *item);".to_string(),
                 WireScalar::U16 => "write_u16(&mut out, *item);".to_string(),
                 WireScalar::U32 => "write_u32(&mut out, *item);".to_string(),
@@ -358,6 +358,7 @@ fn emit_array_encode(
 /// Emit statements decoding the fields of one struct level from `reader`
 /// into `subject`, followed by the trailing tagged-field section when
 /// flexible.
+#[allow(clippy::too_many_arguments)] // recursive emitter: each arg is used at every level
 fn emit_struct_decode(
     out: &mut String,
     indent: &str,
@@ -366,6 +367,7 @@ fn emit_struct_decode(
     parent_versions: VersionRange,
     subject: &str,
     flexible: &str,
+    depth: usize,
 ) -> Result<(), CodegenError> {
     for field in fields {
         if field.versions == parent_versions {
@@ -377,6 +379,7 @@ fn emit_struct_decode(
                 parent_versions,
                 flexible,
                 subject,
+                depth,
             )?;
         } else {
             let _ = writeln!(out, "{indent}if {} {{", gate_expr(field));
@@ -388,6 +391,7 @@ fn emit_struct_decode(
                 parent_versions,
                 flexible,
                 subject,
+                depth,
             )?;
             let _ = writeln!(out, "{indent}}}");
         }
@@ -399,6 +403,7 @@ fn emit_struct_decode(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // recursive emitter: each arg is used at every level
 fn emit_field_decode(
     out: &mut String,
     indent: &str,
@@ -407,6 +412,7 @@ fn emit_field_decode(
     parent_versions: VersionRange,
     flexible: &str,
     subject: &str,
+    depth: usize,
 ) -> Result<(), CodegenError> {
     let fname = crate::snake_case_pub(&field.name);
     let optional = field_is_optional(field, parent_versions);
@@ -417,6 +423,11 @@ fn emit_field_decode(
             format!("{subject}.{fname} = {expr};")
         }
     };
+    // Nullable helpers already yield Option<T>; wrapping them again would
+    // produce Option<Option<T>>.
+    let assign_nullable = |expr: &str| format!("{subject}.{fname} = {expr};");
+    let items = format!("items_{depth}");
+    let len = format!("len_{depth}");
 
     match &field.field_type {
         FieldTypeSpec::String => {
@@ -424,7 +435,7 @@ fn emit_field_decode(
                 let _ = writeln!(
                     out,
                     "{indent}{}",
-                    assign(&format!("read_nullable_string(&mut reader, {flexible})?"))
+                    assign_nullable(&format!("read_nullable_string(&mut reader, {flexible})?"))
                 );
             } else {
                 let _ = writeln!(
@@ -439,7 +450,7 @@ fn emit_field_decode(
                 let _ = writeln!(
                     out,
                     "{indent}{}",
-                    assign(&format!("read_nullable_bytes(&mut reader, {flexible})?"))
+                    assign_nullable(&format!("read_nullable_bytes(&mut reader, {flexible})?"))
                 );
             } else {
                 let _ = writeln!(
@@ -455,10 +466,10 @@ fn emit_field_decode(
                     out,
                     "{indent}match read_nullable_array_len(&mut reader, {flexible})? {{"
                 );
-                let _ = writeln!(out, "{indent}    Some(len) => {{");
+                let _ = writeln!(out, "{indent}    Some({len}) => {{");
                 let _ = writeln!(
                     out,
-                    "{indent}        let mut items = Vec::with_capacity(len);"
+                    "{indent}        let mut {items} = Vec::with_capacity({len});"
                 );
                 emit_array_decode(
                     out,
@@ -467,19 +478,23 @@ fn emit_field_decode(
                     inner,
                     field,
                     flexible,
+                    &items,
+                    depth,
                 )?;
-                let _ = writeln!(out, "{indent}        {subject}.{fname} = Some(items);");
+                let _ = writeln!(out, "{indent}        {subject}.{fname} = Some({items});");
                 let _ = writeln!(out, "{indent}    }}");
                 let _ = writeln!(out, "{indent}    None => {{}}");
                 let _ = writeln!(out, "{indent}}}");
             } else {
                 let _ = writeln!(
                     out,
-                    "{indent}let len = read_array_len(&mut reader, {flexible})?;"
+                    "{indent}let {len} = read_array_len(&mut reader, {flexible})?;"
                 );
-                let _ = writeln!(out, "{indent}let mut items = Vec::with_capacity(len);");
-                emit_array_decode(out, indent, top_level, inner, field, flexible)?;
-                let _ = writeln!(out, "{indent}{}", assign("items"));
+                let _ = writeln!(out, "{indent}let mut {items} = Vec::with_capacity({len});");
+                emit_array_decode(
+                    out, indent, top_level, inner, field, flexible, &items, depth,
+                )?;
+                let _ = writeln!(out, "{indent}{}", assign(&items));
             }
         }
         FieldTypeSpec::Struct(n) => {
@@ -493,6 +508,7 @@ fn emit_field_decode(
                 field.versions,
                 "nested",
                 flexible,
+                depth,
             )?;
             let _ = writeln!(out, "{indent}{}", assign("nested"));
         }
@@ -508,6 +524,7 @@ fn emit_field_decode(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // recursive emitter: each arg is used at every level
 fn emit_array_decode(
     out: &mut String,
     indent: &str,
@@ -515,8 +532,10 @@ fn emit_array_decode(
     inner: &FieldTypeSpec,
     field: &MessageFieldSpec,
     flexible: &str,
+    items: &str,
+    depth: usize,
 ) -> Result<(), CodegenError> {
-    let _ = writeln!(out, "{indent}for _ in 0..len {{");
+    let _ = writeln!(out, "{indent}for _ in 0..len_{depth} {{");
     match inner {
         FieldTypeSpec::Struct(n) => {
             let nested_name = crate::nested_struct_name_pub(top_level, n);
@@ -529,19 +548,20 @@ fn emit_array_decode(
                 field.versions,
                 "item",
                 flexible,
+                depth + 1,
             )?;
-            let _ = writeln!(out, "{indent}    items.push(item);");
+            let _ = writeln!(out, "{indent}    {items}.push(item);");
         }
         FieldTypeSpec::String => {
             let _ = writeln!(
                 out,
-                "{indent}    items.push(read_string(&mut reader, {flexible})?);"
+                "{indent}    {items}.push(read_string(&mut reader, {flexible})?);"
             );
         }
         FieldTypeSpec::Bytes | FieldTypeSpec::Records => {
             let _ = writeln!(
                 out,
-                "{indent}    items.push(read_bytes(&mut reader, {flexible})?);"
+                "{indent}    {items}.push(read_bytes(&mut reader, {flexible})?);"
             );
         }
         other => {
@@ -550,11 +570,7 @@ fn emit_array_decode(
                     "codec array decode: {other:?}"
                 )));
             };
-            let deref = match kind {
-                WireScalar::Uuid | WireScalar::Bool => "",
-                _ => "*",
-            };
-            let _ = writeln!(out, "{indent}    items.push({deref}{});", read_call(&kind));
+            let _ = writeln!(out, "{indent}    {items}.push({});", read_call(&kind));
         }
     }
     let _ = writeln!(out, "{indent}}}");
@@ -674,6 +690,7 @@ fn emit_codec_impl(out: &mut String, spec: &ProtocolMessageSpec) -> Result<(), C
         spec.valid_versions,
         "decoded",
         "flexible",
+        0,
     )?;
     let _ = writeln!(out, "        Ok((decoded, reader.cursor))");
     let _ = writeln!(out, "    }}");
@@ -703,7 +720,7 @@ mod tests {
         assert!(src.contains("pub const DELETE_GROUPS_REQUEST_MAX_VERSION: i16 = 2;"));
         assert!(src.contains("impl VersionedCodec for DeleteGroupsRequest"));
         assert!(src.contains("write_array_len(&mut out, self.groups_names.len(), flexible)?;"));
-        assert!(src.contains("items.push(read_string(&mut reader, flexible)?);"));
+        assert!(src.contains("items_0.push(read_string(&mut reader, flexible)?);"));
     }
 
     #[test]

@@ -345,3 +345,85 @@ pub struct ListGroupsResponseListedGroup {
     pub group_type: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreateTopicsRequest {
+    pub topics: Vec<CreateTopicsRequestCreatableTopic>,
+    pub timeout_ms: i32,
+    pub validate_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreateTopicsRequestCreatableTopic {
+    pub name: String,
+    pub num_partitions: i32,
+    pub replication_factor: i16,
+    pub assignments: Vec<CreateTopicsRequestCreatableReplicaAssignment>,
+    pub configs: Vec<CreateTopicsRequestCreatableTopicConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreateTopicsRequestCreatableReplicaAssignment {
+    pub partition_index: i32,
+    pub broker_ids: Vec<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreateTopicsRequestCreatableTopicConfig {
+    pub name: String,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreateTopicsResponse {
+    pub throttle_time_ms: i32,
+    pub topics: Vec<CreateTopicsResponseCreatableTopicResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreateTopicsResponseCreatableTopicResult {
+    pub name: String,
+    pub topic_id: Option<[u8; 16]>,
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub topic_config_error_code: Option<i16>,
+    pub num_partitions: Option<i32>,
+    pub replication_factor: Option<i16>,
+    pub configs: Option<Vec<CreateTopicsResponseCreatableTopicConfigs>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreateTopicsResponseCreatableTopicConfigs {
+    pub name: String,
+    pub value: Option<String>,
+    pub read_only: bool,
+    pub config_source: i8,
+    pub is_sensitive: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeleteTopicsRequest {
+    pub topics: Option<Vec<DeleteTopicsRequestDeleteTopicState>>,
+    pub topic_names: Option<Vec<String>>,
+    pub timeout_ms: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeleteTopicsRequestDeleteTopicState {
+    pub name: Option<String>,
+    pub topic_id: [u8; 16],
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeleteTopicsResponse {
+    pub throttle_time_ms: i32,
+    pub responses: Vec<DeleteTopicsResponseDeletableTopicResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeleteTopicsResponseDeletableTopicResult {
+    pub name: Option<String>,
+    pub topic_id: Option<[u8; 16]>,
+    pub error_code: i16,
+    pub error_message: Option<String>,
+}
+
