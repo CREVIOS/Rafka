@@ -567,3 +567,857 @@ impl VersionedCodec for DeleteTopicsResponse {
     }
 }
 
+#[allow(clippy::all)]
+pub const DESCRIBE_CONFIGS_REQUEST_MIN_VERSION: i16 = 1;
+#[allow(clippy::all)]
+pub const DESCRIBE_CONFIGS_REQUEST_MAX_VERSION: i16 = 4;
+#[allow(clippy::all)]
+pub const DESCRIBE_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 4;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeConfigsRequest {
+    const API_NAME: &'static str = "DescribeConfigsRequest";
+    const MIN_VERSION: i16 = DESCRIBE_CONFIGS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_CONFIGS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.resources.len(), flexible)?;
+        for item in &self.resources {
+            write_i8(&mut out, item.resource_type);
+            write_string(&mut out, &item.resource_name, flexible)?;
+            write_nullable_array_len(&mut out, item.configuration_keys.as_ref().map(Vec::len), flexible)?;
+            if let Some(items) = item.configuration_keys.as_ref() {
+                for item in items {
+                    write_string(&mut out, item, flexible)?;
+                }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        write_bool(&mut out, self.include_synonyms);
+        if version >= 3 && version <= 4 {
+        write_bool(&mut out, self.include_documentation.unwrap_or(false));
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = DescribeConfigsRequestDescribeConfigsResource::default();
+            item.resource_type = reader.read_i8()?;
+            item.resource_name = read_string(&mut reader, flexible)?;
+            match read_nullable_array_len(&mut reader, flexible)? {
+                Some(len_1) => {
+                    let mut items_1 = Vec::with_capacity(len_1);
+                    for _ in 0..len_1 {
+                        items_1.push(read_string(&mut reader, flexible)?);
+                    }
+                    item.configuration_keys = Some(items_1);
+                }
+                None => {}
+            }
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.resources = items_0;
+        decoded.include_synonyms = reader.read_bool()?;
+        if version >= 3 && version <= 4 {
+        decoded.include_documentation = Some(reader.read_bool()?);
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_CONFIGS_RESPONSE_MIN_VERSION: i16 = 1;
+#[allow(clippy::all)]
+pub const DESCRIBE_CONFIGS_RESPONSE_MAX_VERSION: i16 = 4;
+#[allow(clippy::all)]
+pub const DESCRIBE_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 4;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeConfigsResponse {
+    const API_NAME: &'static str = "DescribeConfigsResponse";
+    const MIN_VERSION: i16 = DESCRIBE_CONFIGS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_CONFIGS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_array_len(&mut out, self.results.len(), flexible)?;
+        for item in &self.results {
+            write_i16(&mut out, item.error_code);
+            write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
+            write_i8(&mut out, item.resource_type);
+            write_string(&mut out, &item.resource_name, flexible)?;
+            write_array_len(&mut out, item.configs.len(), flexible)?;
+            for item in &item.configs {
+                write_string(&mut out, &item.name, flexible)?;
+                write_nullable_string(&mut out, item.value.as_deref(), flexible)?;
+                write_bool(&mut out, item.read_only);
+                write_i8(&mut out, item.config_source);
+                write_bool(&mut out, item.is_sensitive);
+                write_array_len(&mut out, item.synonyms.len(), flexible)?;
+                for item in &item.synonyms {
+                    write_string(&mut out, &item.name, flexible)?;
+                    write_nullable_string(&mut out, item.value.as_deref(), flexible)?;
+                    write_i8(&mut out, item.source);
+                    if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+                }
+                if version >= 3 && version <= 4 {
+                write_i8(&mut out, item.config_type.ok_or(ProtocolError::MissingRequiredField("DescribeConfigsResponse.Results.Configs.ConfigType"))?);
+                }
+                if version >= 3 && version <= 4 {
+                write_nullable_string(&mut out, item.documentation.as_deref(), flexible)?;
+                }
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = DescribeConfigsResponseDescribeConfigsResult::default();
+            item.error_code = reader.read_i16()?;
+            item.error_message = read_nullable_string(&mut reader, flexible)?;
+            item.resource_type = reader.read_i8()?;
+            item.resource_name = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = DescribeConfigsResponseDescribeConfigsResourceResult::default();
+                item.name = read_string(&mut reader, flexible)?;
+                item.value = read_nullable_string(&mut reader, flexible)?;
+                item.read_only = reader.read_bool()?;
+                item.config_source = reader.read_i8()?;
+                item.is_sensitive = reader.read_bool()?;
+                let len_2 = read_array_len(&mut reader, flexible)?;
+                let mut items_2 = Vec::with_capacity(len_2);
+                for _ in 0..len_2 {
+                    let mut item = DescribeConfigsResponseDescribeConfigsSynonym::default();
+                    item.name = read_string(&mut reader, flexible)?;
+                    item.value = read_nullable_string(&mut reader, flexible)?;
+                    item.source = reader.read_i8()?;
+                    if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                    items_2.push(item);
+                }
+                item.synonyms = items_2;
+                if version >= 3 && version <= 4 {
+                item.config_type = Some(reader.read_i8()?);
+                }
+                if version >= 3 && version <= 4 {
+                item.documentation = read_nullable_string(&mut reader, flexible)?;
+                }
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.configs = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.results = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const ALTER_CONFIGS_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const ALTER_CONFIGS_REQUEST_MAX_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const ALTER_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 2;
+
+#[allow(clippy::all)]
+impl VersionedCodec for AlterConfigsRequest {
+    const API_NAME: &'static str = "AlterConfigsRequest";
+    const MIN_VERSION: i16 = ALTER_CONFIGS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = ALTER_CONFIGS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, ALTER_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.resources.len(), flexible)?;
+        for item in &self.resources {
+            write_i8(&mut out, item.resource_type);
+            write_string(&mut out, &item.resource_name, flexible)?;
+            write_array_len(&mut out, item.configs.len(), flexible)?;
+            for item in &item.configs {
+                write_string(&mut out, &item.name, flexible)?;
+                write_nullable_string(&mut out, item.value.as_deref(), flexible)?;
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        write_bool(&mut out, self.validate_only);
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, ALTER_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = AlterConfigsRequestAlterConfigsResource::default();
+            item.resource_type = reader.read_i8()?;
+            item.resource_name = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = AlterConfigsRequestAlterableConfig::default();
+                item.name = read_string(&mut reader, flexible)?;
+                item.value = read_nullable_string(&mut reader, flexible)?;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.configs = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.resources = items_0;
+        decoded.validate_only = reader.read_bool()?;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const ALTER_CONFIGS_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const ALTER_CONFIGS_RESPONSE_MAX_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const ALTER_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 2;
+
+#[allow(clippy::all)]
+impl VersionedCodec for AlterConfigsResponse {
+    const API_NAME: &'static str = "AlterConfigsResponse";
+    const MIN_VERSION: i16 = ALTER_CONFIGS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = ALTER_CONFIGS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, ALTER_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_array_len(&mut out, self.responses.len(), flexible)?;
+        for item in &self.responses {
+            write_i16(&mut out, item.error_code);
+            write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
+            write_i8(&mut out, item.resource_type);
+            write_string(&mut out, &item.resource_name, flexible)?;
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, ALTER_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = AlterConfigsResponseAlterConfigsResourceResponse::default();
+            item.error_code = reader.read_i16()?;
+            item.error_message = read_nullable_string(&mut reader, flexible)?;
+            item.resource_type = reader.read_i8()?;
+            item.resource_name = read_string(&mut reader, flexible)?;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.responses = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const INCREMENTAL_ALTER_CONFIGS_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const INCREMENTAL_ALTER_CONFIGS_REQUEST_MAX_VERSION: i16 = 1;
+#[allow(clippy::all)]
+pub const INCREMENTAL_ALTER_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 1;
+
+#[allow(clippy::all)]
+impl VersionedCodec for IncrementalAlterConfigsRequest {
+    const API_NAME: &'static str = "IncrementalAlterConfigsRequest";
+    const MIN_VERSION: i16 = INCREMENTAL_ALTER_CONFIGS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = INCREMENTAL_ALTER_CONFIGS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, INCREMENTAL_ALTER_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.resources.len(), flexible)?;
+        for item in &self.resources {
+            write_i8(&mut out, item.resource_type);
+            write_string(&mut out, &item.resource_name, flexible)?;
+            write_array_len(&mut out, item.configs.len(), flexible)?;
+            for item in &item.configs {
+                write_string(&mut out, &item.name, flexible)?;
+                write_i8(&mut out, item.config_operation);
+                write_nullable_string(&mut out, item.value.as_deref(), flexible)?;
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        write_bool(&mut out, self.validate_only);
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, INCREMENTAL_ALTER_CONFIGS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = IncrementalAlterConfigsRequestAlterConfigsResource::default();
+            item.resource_type = reader.read_i8()?;
+            item.resource_name = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = IncrementalAlterConfigsRequestAlterableConfig::default();
+                item.name = read_string(&mut reader, flexible)?;
+                item.config_operation = reader.read_i8()?;
+                item.value = read_nullable_string(&mut reader, flexible)?;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.configs = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.resources = items_0;
+        decoded.validate_only = reader.read_bool()?;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const INCREMENTAL_ALTER_CONFIGS_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const INCREMENTAL_ALTER_CONFIGS_RESPONSE_MAX_VERSION: i16 = 1;
+#[allow(clippy::all)]
+pub const INCREMENTAL_ALTER_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 1;
+
+#[allow(clippy::all)]
+impl VersionedCodec for IncrementalAlterConfigsResponse {
+    const API_NAME: &'static str = "IncrementalAlterConfigsResponse";
+    const MIN_VERSION: i16 = INCREMENTAL_ALTER_CONFIGS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = INCREMENTAL_ALTER_CONFIGS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, INCREMENTAL_ALTER_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_array_len(&mut out, self.responses.len(), flexible)?;
+        for item in &self.responses {
+            write_i16(&mut out, item.error_code);
+            write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
+            write_i8(&mut out, item.resource_type);
+            write_string(&mut out, &item.resource_name, flexible)?;
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, INCREMENTAL_ALTER_CONFIGS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = IncrementalAlterConfigsResponseAlterConfigsResourceResponse::default();
+            item.error_code = reader.read_i16()?;
+            item.error_message = read_nullable_string(&mut reader, flexible)?;
+            item.resource_type = reader.read_i8()?;
+            item.resource_name = read_string(&mut reader, flexible)?;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.responses = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const CREATE_PARTITIONS_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const CREATE_PARTITIONS_REQUEST_MAX_VERSION: i16 = 3;
+#[allow(clippy::all)]
+pub const CREATE_PARTITIONS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 2;
+
+#[allow(clippy::all)]
+impl VersionedCodec for CreatePartitionsRequest {
+    const API_NAME: &'static str = "CreatePartitionsRequest";
+    const MIN_VERSION: i16 = CREATE_PARTITIONS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = CREATE_PARTITIONS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, CREATE_PARTITIONS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_string(&mut out, &item.name, flexible)?;
+            write_i32(&mut out, item.count);
+            write_nullable_array_len(&mut out, item.assignments.as_ref().map(Vec::len), flexible)?;
+            if let Some(items) = item.assignments.as_ref() {
+                for item in items {
+                    write_array_len(&mut out, item.broker_ids.len(), flexible)?;
+                    for item in &item.broker_ids {
+                        write_i32(&mut out, *item);
+                    }
+                    if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+                }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        write_i32(&mut out, self.timeout_ms);
+        write_bool(&mut out, self.validate_only);
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, CREATE_PARTITIONS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = CreatePartitionsRequestCreatePartitionsTopic::default();
+            item.name = read_string(&mut reader, flexible)?;
+            item.count = reader.read_i32()?;
+            match read_nullable_array_len(&mut reader, flexible)? {
+                Some(len_1) => {
+                    let mut items_1 = Vec::with_capacity(len_1);
+                    for _ in 0..len_1 {
+                        let mut item = CreatePartitionsRequestCreatePartitionsAssignment::default();
+                        let len_2 = read_array_len(&mut reader, flexible)?;
+                        let mut items_2 = Vec::with_capacity(len_2);
+                        for _ in 0..len_2 {
+                            items_2.push(reader.read_i32()?);
+                        }
+                        item.broker_ids = items_2;
+                        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                        items_1.push(item);
+                    }
+                    item.assignments = Some(items_1);
+                }
+                None => {}
+            }
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        decoded.timeout_ms = reader.read_i32()?;
+        decoded.validate_only = reader.read_bool()?;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const CREATE_PARTITIONS_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const CREATE_PARTITIONS_RESPONSE_MAX_VERSION: i16 = 3;
+#[allow(clippy::all)]
+pub const CREATE_PARTITIONS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 2;
+
+#[allow(clippy::all)]
+impl VersionedCodec for CreatePartitionsResponse {
+    const API_NAME: &'static str = "CreatePartitionsResponse";
+    const MIN_VERSION: i16 = CREATE_PARTITIONS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = CREATE_PARTITIONS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, CREATE_PARTITIONS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_array_len(&mut out, self.results.len(), flexible)?;
+        for item in &self.results {
+            write_string(&mut out, &item.name, flexible)?;
+            write_i16(&mut out, item.error_code);
+            write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, CREATE_PARTITIONS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = CreatePartitionsResponseCreatePartitionsTopicResult::default();
+            item.name = read_string(&mut reader, flexible)?;
+            item.error_code = reader.read_i16()?;
+            item.error_message = read_nullable_string(&mut reader, flexible)?;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.results = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const FIND_COORDINATOR_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const FIND_COORDINATOR_REQUEST_MAX_VERSION: i16 = 6;
+#[allow(clippy::all)]
+pub const FIND_COORDINATOR_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 3;
+
+#[allow(clippy::all)]
+impl VersionedCodec for FindCoordinatorRequest {
+    const API_NAME: &'static str = "FindCoordinatorRequest";
+    const MIN_VERSION: i16 = FIND_COORDINATOR_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = FIND_COORDINATOR_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FIND_COORDINATOR_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        if version >= 0 && version <= 3 {
+        write_string(&mut out, self.key.as_deref().unwrap_or_default(), flexible)?;
+        }
+        if version >= 1 && version <= 6 {
+        write_i8(&mut out, self.key_type.ok_or(ProtocolError::MissingRequiredField("FindCoordinatorRequest.KeyType"))?);
+        }
+        if version >= 4 && version <= 6 {
+        write_nullable_array_len(&mut out, self.coordinator_keys.as_ref().map(Vec::len), flexible)?;
+        if let Some(items) = self.coordinator_keys.as_ref() {
+            for item in items {
+                write_string(&mut out, item, flexible)?;
+            }
+        }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FIND_COORDINATOR_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        if version >= 0 && version <= 3 {
+        decoded.key = Some(read_string(&mut reader, flexible)?);
+        }
+        if version >= 1 && version <= 6 {
+        decoded.key_type = Some(reader.read_i8()?);
+        }
+        if version >= 4 && version <= 6 {
+        match read_nullable_array_len(&mut reader, flexible)? {
+            Some(len_0) => {
+                let mut items_0 = Vec::with_capacity(len_0);
+                for _ in 0..len_0 {
+                    items_0.push(read_string(&mut reader, flexible)?);
+                }
+                decoded.coordinator_keys = Some(items_0);
+            }
+            None => {}
+        }
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const FIND_COORDINATOR_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const FIND_COORDINATOR_RESPONSE_MAX_VERSION: i16 = 6;
+#[allow(clippy::all)]
+pub const FIND_COORDINATOR_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 3;
+
+#[allow(clippy::all)]
+impl VersionedCodec for FindCoordinatorResponse {
+    const API_NAME: &'static str = "FindCoordinatorResponse";
+    const MIN_VERSION: i16 = FIND_COORDINATOR_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = FIND_COORDINATOR_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FIND_COORDINATOR_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        if version >= 1 && version <= 6 {
+        write_i32(&mut out, self.throttle_time_ms.ok_or(ProtocolError::MissingRequiredField("FindCoordinatorResponse.ThrottleTimeMs"))?);
+        }
+        if version >= 0 && version <= 3 {
+        write_i16(&mut out, self.error_code.ok_or(ProtocolError::MissingRequiredField("FindCoordinatorResponse.ErrorCode"))?);
+        }
+        if version >= 1 && version <= 3 {
+        write_nullable_string(&mut out, self.error_message.as_deref(), flexible)?;
+        }
+        if version >= 0 && version <= 3 {
+        write_i32(&mut out, self.node_id.ok_or(ProtocolError::MissingRequiredField("FindCoordinatorResponse.NodeId"))?);
+        }
+        if version >= 0 && version <= 3 {
+        write_string(&mut out, self.host.as_deref().unwrap_or_default(), flexible)?;
+        }
+        if version >= 0 && version <= 3 {
+        write_i32(&mut out, self.port.ok_or(ProtocolError::MissingRequiredField("FindCoordinatorResponse.Port"))?);
+        }
+        if version >= 4 && version <= 6 {
+        write_nullable_array_len(&mut out, self.coordinators.as_ref().map(Vec::len), flexible)?;
+        if let Some(items) = self.coordinators.as_ref() {
+            for item in items {
+                write_string(&mut out, &item.key, flexible)?;
+                write_i32(&mut out, item.node_id);
+                write_string(&mut out, &item.host, flexible)?;
+                write_i32(&mut out, item.port);
+                write_i16(&mut out, item.error_code);
+                write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+        }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FIND_COORDINATOR_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        if version >= 1 && version <= 6 {
+        decoded.throttle_time_ms = Some(reader.read_i32()?);
+        }
+        if version >= 0 && version <= 3 {
+        decoded.error_code = Some(reader.read_i16()?);
+        }
+        if version >= 1 && version <= 3 {
+        decoded.error_message = read_nullable_string(&mut reader, flexible)?;
+        }
+        if version >= 0 && version <= 3 {
+        decoded.node_id = Some(reader.read_i32()?);
+        }
+        if version >= 0 && version <= 3 {
+        decoded.host = Some(read_string(&mut reader, flexible)?);
+        }
+        if version >= 0 && version <= 3 {
+        decoded.port = Some(reader.read_i32()?);
+        }
+        if version >= 4 && version <= 6 {
+        match read_nullable_array_len(&mut reader, flexible)? {
+            Some(len_0) => {
+                let mut items_0 = Vec::with_capacity(len_0);
+                for _ in 0..len_0 {
+                    let mut item = FindCoordinatorResponseCoordinator::default();
+                    item.key = read_string(&mut reader, flexible)?;
+                    item.node_id = reader.read_i32()?;
+                    item.host = read_string(&mut reader, flexible)?;
+                    item.port = reader.read_i32()?;
+                    item.error_code = reader.read_i16()?;
+                    item.error_message = read_nullable_string(&mut reader, flexible)?;
+                    if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                    items_0.push(item);
+                }
+                decoded.coordinators = Some(items_0);
+            }
+            None => {}
+        }
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_GROUPS_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_GROUPS_REQUEST_MAX_VERSION: i16 = 6;
+#[allow(clippy::all)]
+pub const DESCRIBE_GROUPS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 5;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeGroupsRequest {
+    const API_NAME: &'static str = "DescribeGroupsRequest";
+    const MIN_VERSION: i16 = DESCRIBE_GROUPS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_GROUPS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_GROUPS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.groups.len(), flexible)?;
+        for item in &self.groups {
+            write_string(&mut out, item, flexible)?;
+        }
+        if version >= 3 && version <= 6 {
+        write_bool(&mut out, self.include_authorized_operations.unwrap_or(false));
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_GROUPS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            items_0.push(read_string(&mut reader, flexible)?);
+        }
+        decoded.groups = items_0;
+        if version >= 3 && version <= 6 {
+        decoded.include_authorized_operations = Some(reader.read_bool()?);
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_GROUPS_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_GROUPS_RESPONSE_MAX_VERSION: i16 = 6;
+#[allow(clippy::all)]
+pub const DESCRIBE_GROUPS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 5;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeGroupsResponse {
+    const API_NAME: &'static str = "DescribeGroupsResponse";
+    const MIN_VERSION: i16 = DESCRIBE_GROUPS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_GROUPS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_GROUPS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        if version >= 1 && version <= 6 {
+        write_i32(&mut out, self.throttle_time_ms.ok_or(ProtocolError::MissingRequiredField("DescribeGroupsResponse.ThrottleTimeMs"))?);
+        }
+        write_array_len(&mut out, self.groups.len(), flexible)?;
+        for item in &self.groups {
+            write_i16(&mut out, item.error_code);
+            if version == 6 {
+            write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
+            }
+            write_string(&mut out, &item.group_id, flexible)?;
+            write_string(&mut out, &item.group_state, flexible)?;
+            write_string(&mut out, &item.protocol_type, flexible)?;
+            write_string(&mut out, &item.protocol_data, flexible)?;
+            write_array_len(&mut out, item.members.len(), flexible)?;
+            for item in &item.members {
+                write_string(&mut out, &item.member_id, flexible)?;
+                if version >= 4 && version <= 6 {
+                write_nullable_string(&mut out, item.group_instance_id.as_deref(), flexible)?;
+                }
+                write_string(&mut out, &item.client_id, flexible)?;
+                write_string(&mut out, &item.client_host, flexible)?;
+                write_bytes(&mut out, &item.member_metadata, flexible)?;
+                write_bytes(&mut out, &item.member_assignment, flexible)?;
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if version >= 3 && version <= 6 {
+            write_i32(&mut out, item.authorized_operations.ok_or(ProtocolError::MissingRequiredField("DescribeGroupsResponse.Groups.AuthorizedOperations"))?);
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_GROUPS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        if version >= 1 && version <= 6 {
+        decoded.throttle_time_ms = Some(reader.read_i32()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = DescribeGroupsResponseDescribedGroup::default();
+            item.error_code = reader.read_i16()?;
+            if version == 6 {
+            item.error_message = read_nullable_string(&mut reader, flexible)?;
+            }
+            item.group_id = read_string(&mut reader, flexible)?;
+            item.group_state = read_string(&mut reader, flexible)?;
+            item.protocol_type = read_string(&mut reader, flexible)?;
+            item.protocol_data = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = DescribeGroupsResponseDescribedGroupMember::default();
+                item.member_id = read_string(&mut reader, flexible)?;
+                if version >= 4 && version <= 6 {
+                item.group_instance_id = read_nullable_string(&mut reader, flexible)?;
+                }
+                item.client_id = read_string(&mut reader, flexible)?;
+                item.client_host = read_string(&mut reader, flexible)?;
+                item.member_metadata = read_bytes(&mut reader, flexible)?;
+                item.member_assignment = read_bytes(&mut reader, flexible)?;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.members = items_1;
+            if version >= 3 && version <= 6 {
+            item.authorized_operations = Some(reader.read_i32()?);
+            }
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.groups = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
