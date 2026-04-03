@@ -427,3 +427,212 @@ pub struct DeleteTopicsResponseDeletableTopicResult {
     pub error_message: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeConfigsRequest {
+    pub resources: Vec<DescribeConfigsRequestDescribeConfigsResource>,
+    pub include_synonyms: bool,
+    pub include_documentation: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeConfigsRequestDescribeConfigsResource {
+    pub resource_type: i8,
+    pub resource_name: String,
+    pub configuration_keys: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeConfigsResponse {
+    pub throttle_time_ms: i32,
+    pub results: Vec<DescribeConfigsResponseDescribeConfigsResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeConfigsResponseDescribeConfigsResult {
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub resource_type: i8,
+    pub resource_name: String,
+    pub configs: Vec<DescribeConfigsResponseDescribeConfigsResourceResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeConfigsResponseDescribeConfigsResourceResult {
+    pub name: String,
+    pub value: Option<String>,
+    pub read_only: bool,
+    pub config_source: i8,
+    pub is_sensitive: bool,
+    pub synonyms: Vec<DescribeConfigsResponseDescribeConfigsSynonym>,
+    pub config_type: Option<i8>,
+    pub documentation: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeConfigsResponseDescribeConfigsSynonym {
+    pub name: String,
+    pub value: Option<String>,
+    pub source: i8,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AlterConfigsRequest {
+    pub resources: Vec<AlterConfigsRequestAlterConfigsResource>,
+    pub validate_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AlterConfigsRequestAlterConfigsResource {
+    pub resource_type: i8,
+    pub resource_name: String,
+    pub configs: Vec<AlterConfigsRequestAlterableConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AlterConfigsRequestAlterableConfig {
+    pub name: String,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AlterConfigsResponse {
+    pub throttle_time_ms: i32,
+    pub responses: Vec<AlterConfigsResponseAlterConfigsResourceResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct AlterConfigsResponseAlterConfigsResourceResponse {
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub resource_type: i8,
+    pub resource_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct IncrementalAlterConfigsRequest {
+    pub resources: Vec<IncrementalAlterConfigsRequestAlterConfigsResource>,
+    pub validate_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct IncrementalAlterConfigsRequestAlterConfigsResource {
+    pub resource_type: i8,
+    pub resource_name: String,
+    pub configs: Vec<IncrementalAlterConfigsRequestAlterableConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct IncrementalAlterConfigsRequestAlterableConfig {
+    pub name: String,
+    pub config_operation: i8,
+    pub value: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct IncrementalAlterConfigsResponse {
+    pub throttle_time_ms: i32,
+    pub responses: Vec<IncrementalAlterConfigsResponseAlterConfigsResourceResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct IncrementalAlterConfigsResponseAlterConfigsResourceResponse {
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub resource_type: i8,
+    pub resource_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreatePartitionsRequest {
+    pub topics: Vec<CreatePartitionsRequestCreatePartitionsTopic>,
+    pub timeout_ms: i32,
+    pub validate_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreatePartitionsRequestCreatePartitionsTopic {
+    pub name: String,
+    pub count: i32,
+    pub assignments: Option<Vec<CreatePartitionsRequestCreatePartitionsAssignment>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreatePartitionsRequestCreatePartitionsAssignment {
+    pub broker_ids: Vec<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreatePartitionsResponse {
+    pub throttle_time_ms: i32,
+    pub results: Vec<CreatePartitionsResponseCreatePartitionsTopicResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct CreatePartitionsResponseCreatePartitionsTopicResult {
+    pub name: String,
+    pub error_code: i16,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FindCoordinatorRequest {
+    pub key: Option<String>,
+    pub key_type: Option<i8>,
+    pub coordinator_keys: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FindCoordinatorResponse {
+    pub throttle_time_ms: Option<i32>,
+    pub error_code: Option<i16>,
+    pub error_message: Option<String>,
+    pub node_id: Option<i32>,
+    pub host: Option<String>,
+    pub port: Option<i32>,
+    pub coordinators: Option<Vec<FindCoordinatorResponseCoordinator>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FindCoordinatorResponseCoordinator {
+    pub key: String,
+    pub node_id: i32,
+    pub host: String,
+    pub port: i32,
+    pub error_code: i16,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeGroupsRequest {
+    pub groups: Vec<String>,
+    pub include_authorized_operations: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeGroupsResponse {
+    pub throttle_time_ms: Option<i32>,
+    pub groups: Vec<DescribeGroupsResponseDescribedGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeGroupsResponseDescribedGroup {
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub group_id: String,
+    pub group_state: String,
+    pub protocol_type: String,
+    pub protocol_data: String,
+    pub members: Vec<DescribeGroupsResponseDescribedGroupMember>,
+    pub authorized_operations: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeGroupsResponseDescribedGroupMember {
+    pub member_id: String,
+    pub group_instance_id: Option<String>,
+    pub client_id: String,
+    pub client_host: String,
+    pub member_metadata: Vec<u8>,
+    pub member_assignment: Vec<u8>,
+}
+
