@@ -636,3 +636,166 @@ pub struct DescribeGroupsResponseDescribedGroupMember {
     pub member_assignment: Vec<u8>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MetadataRequest {
+    pub topics: Option<Vec<MetadataRequestMetadataRequestTopic>>,
+    pub allow_auto_topic_creation: Option<bool>,
+    pub include_cluster_authorized_operations: Option<bool>,
+    pub include_topic_authorized_operations: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MetadataRequestMetadataRequestTopic {
+    pub topic_id: Option<[u8; 16]>,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MetadataResponse {
+    pub throttle_time_ms: Option<i32>,
+    pub brokers: Vec<MetadataResponseMetadataResponseBroker>,
+    pub cluster_id: Option<String>,
+    pub controller_id: Option<i32>,
+    pub topics: Vec<MetadataResponseMetadataResponseTopic>,
+    pub cluster_authorized_operations: Option<i32>,
+    pub error_code: Option<i16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MetadataResponseMetadataResponseBroker {
+    pub node_id: i32,
+    pub host: String,
+    pub port: i32,
+    pub rack: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MetadataResponseMetadataResponseTopic {
+    pub error_code: i16,
+    pub name: Option<String>,
+    pub topic_id: Option<[u8; 16]>,
+    pub is_internal: Option<bool>,
+    pub partitions: Vec<MetadataResponseMetadataResponsePartition>,
+    pub topic_authorized_operations: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct MetadataResponseMetadataResponsePartition {
+    pub error_code: i16,
+    pub partition_index: i32,
+    pub leader_id: i32,
+    pub leader_epoch: Option<i32>,
+    pub replica_nodes: Vec<i32>,
+    pub isr_nodes: Vec<i32>,
+    pub offline_replicas: Option<Vec<i32>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListOffsetsRequest {
+    pub replica_id: i32,
+    pub isolation_level: Option<i8>,
+    pub topics: Vec<ListOffsetsRequestListOffsetsTopic>,
+    pub timeout_ms: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListOffsetsRequestListOffsetsTopic {
+    pub name: String,
+    pub partitions: Vec<ListOffsetsRequestListOffsetsPartition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListOffsetsRequestListOffsetsPartition {
+    pub partition_index: i32,
+    pub current_leader_epoch: Option<i32>,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListOffsetsResponse {
+    pub throttle_time_ms: Option<i32>,
+    pub topics: Vec<ListOffsetsResponseListOffsetsTopicResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListOffsetsResponseListOffsetsTopicResponse {
+    pub name: String,
+    pub partitions: Vec<ListOffsetsResponseListOffsetsPartitionResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListOffsetsResponseListOffsetsPartitionResponse {
+    pub partition_index: i32,
+    pub error_code: i16,
+    pub timestamp: i64,
+    pub offset: i64,
+    pub leader_epoch: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OffsetForLeaderEpochRequest {
+    pub replica_id: Option<i32>,
+    pub topics: Vec<OffsetForLeaderEpochRequestOffsetForLeaderTopic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OffsetForLeaderEpochRequestOffsetForLeaderTopic {
+    pub topic: String,
+    pub partitions: Vec<OffsetForLeaderEpochRequestOffsetForLeaderPartition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OffsetForLeaderEpochRequestOffsetForLeaderPartition {
+    pub partition: i32,
+    pub current_leader_epoch: i32,
+    pub leader_epoch: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OffsetForLeaderEpochResponse {
+    pub throttle_time_ms: i32,
+    pub topics: Vec<OffsetForLeaderEpochResponseOffsetForLeaderTopicResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OffsetForLeaderEpochResponseOffsetForLeaderTopicResult {
+    pub topic: String,
+    pub partitions: Vec<OffsetForLeaderEpochResponseEpochEndOffset>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct OffsetForLeaderEpochResponseEpochEndOffset {
+    pub error_code: i16,
+    pub partition: i32,
+    pub leader_epoch: i32,
+    pub end_offset: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeClusterRequest {
+    pub include_cluster_authorized_operations: bool,
+    pub endpoint_type: Option<i8>,
+    pub include_fenced_brokers: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeClusterResponse {
+    pub throttle_time_ms: i32,
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub endpoint_type: Option<i8>,
+    pub cluster_id: String,
+    pub controller_id: i32,
+    pub brokers: Vec<DescribeClusterResponseDescribeClusterBroker>,
+    pub cluster_authorized_operations: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeClusterResponseDescribeClusterBroker {
+    pub broker_id: i32,
+    pub host: String,
+    pub port: i32,
+    pub rack: Option<String>,
+    pub is_fenced: Option<bool>,
+}
+

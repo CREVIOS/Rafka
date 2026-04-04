@@ -1421,3 +1421,675 @@ impl VersionedCodec for DescribeGroupsResponse {
     }
 }
 
+#[allow(clippy::all)]
+pub const METADATA_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const METADATA_REQUEST_MAX_VERSION: i16 = 13;
+#[allow(clippy::all)]
+pub const METADATA_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 9;
+
+#[allow(clippy::all)]
+impl VersionedCodec for MetadataRequest {
+    const API_NAME: &'static str = "MetadataRequest";
+    const MIN_VERSION: i16 = METADATA_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = METADATA_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, METADATA_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_nullable_array_len(&mut out, self.topics.as_ref().map(Vec::len), flexible)?;
+        if let Some(items) = self.topics.as_ref() {
+            for item in items {
+                if version >= 10 && version <= 13 {
+                write_uuid(&mut out, item.topic_id.as_ref().unwrap_or(&[0_u8; 16]));
+                }
+                write_nullable_string(&mut out, item.name.as_deref(), flexible)?;
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+        }
+        if version >= 4 && version <= 13 {
+        write_bool(&mut out, self.allow_auto_topic_creation.unwrap_or(false));
+        }
+        if version >= 8 && version <= 10 {
+        write_bool(&mut out, self.include_cluster_authorized_operations.unwrap_or(false));
+        }
+        if version >= 8 && version <= 13 {
+        write_bool(&mut out, self.include_topic_authorized_operations.unwrap_or(false));
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, METADATA_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        match read_nullable_array_len(&mut reader, flexible)? {
+            Some(len_0) => {
+                let mut items_0 = Vec::with_capacity(len_0);
+                for _ in 0..len_0 {
+                    let mut item = MetadataRequestMetadataRequestTopic::default();
+                    if version >= 10 && version <= 13 {
+                    item.topic_id = Some(reader.read_uuid()?);
+                    }
+                    item.name = read_nullable_string(&mut reader, flexible)?;
+                    if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                    items_0.push(item);
+                }
+                decoded.topics = Some(items_0);
+            }
+            None => {}
+        }
+        if version >= 4 && version <= 13 {
+        decoded.allow_auto_topic_creation = Some(reader.read_bool()?);
+        }
+        if version >= 8 && version <= 10 {
+        decoded.include_cluster_authorized_operations = Some(reader.read_bool()?);
+        }
+        if version >= 8 && version <= 13 {
+        decoded.include_topic_authorized_operations = Some(reader.read_bool()?);
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const METADATA_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const METADATA_RESPONSE_MAX_VERSION: i16 = 13;
+#[allow(clippy::all)]
+pub const METADATA_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 9;
+
+#[allow(clippy::all)]
+impl VersionedCodec for MetadataResponse {
+    const API_NAME: &'static str = "MetadataResponse";
+    const MIN_VERSION: i16 = METADATA_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = METADATA_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, METADATA_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        if version >= 3 && version <= 13 {
+        write_i32(&mut out, self.throttle_time_ms.ok_or(ProtocolError::MissingRequiredField("MetadataResponse.ThrottleTimeMs"))?);
+        }
+        write_array_len(&mut out, self.brokers.len(), flexible)?;
+        for item in &self.brokers {
+            write_i32(&mut out, item.node_id);
+            write_string(&mut out, &item.host, flexible)?;
+            write_i32(&mut out, item.port);
+            if version >= 1 && version <= 13 {
+            write_nullable_string(&mut out, item.rack.as_deref(), flexible)?;
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if version >= 2 && version <= 13 {
+        write_nullable_string(&mut out, self.cluster_id.as_deref(), flexible)?;
+        }
+        if version >= 1 && version <= 13 {
+        write_i32(&mut out, self.controller_id.ok_or(ProtocolError::MissingRequiredField("MetadataResponse.ControllerId"))?);
+        }
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_i16(&mut out, item.error_code);
+            write_nullable_string(&mut out, item.name.as_deref(), flexible)?;
+            if version >= 10 && version <= 13 {
+            write_uuid(&mut out, item.topic_id.as_ref().unwrap_or(&[0_u8; 16]));
+            }
+            if version >= 1 && version <= 13 {
+            write_bool(&mut out, item.is_internal.unwrap_or(false));
+            }
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i16(&mut out, item.error_code);
+                write_i32(&mut out, item.partition_index);
+                write_i32(&mut out, item.leader_id);
+                if version >= 7 && version <= 13 {
+                write_i32(&mut out, item.leader_epoch.ok_or(ProtocolError::MissingRequiredField("MetadataResponse.Topics.Partitions.LeaderEpoch"))?);
+                }
+                write_array_len(&mut out, item.replica_nodes.len(), flexible)?;
+                for item in &item.replica_nodes {
+                    write_i32(&mut out, *item);
+                }
+                write_array_len(&mut out, item.isr_nodes.len(), flexible)?;
+                for item in &item.isr_nodes {
+                    write_i32(&mut out, *item);
+                }
+                if version >= 5 && version <= 13 {
+                write_nullable_array_len(&mut out, item.offline_replicas.as_ref().map(Vec::len), flexible)?;
+                if let Some(items) = item.offline_replicas.as_ref() {
+                    for item in items {
+                        write_i32(&mut out, *item);
+                    }
+                }
+                }
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if version >= 8 && version <= 13 {
+            write_i32(&mut out, item.topic_authorized_operations.ok_or(ProtocolError::MissingRequiredField("MetadataResponse.Topics.TopicAuthorizedOperations"))?);
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if version >= 8 && version <= 10 {
+        write_i32(&mut out, self.cluster_authorized_operations.ok_or(ProtocolError::MissingRequiredField("MetadataResponse.ClusterAuthorizedOperations"))?);
+        }
+        if version == 13 {
+        write_i16(&mut out, self.error_code.ok_or(ProtocolError::MissingRequiredField("MetadataResponse.ErrorCode"))?);
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, METADATA_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        if version >= 3 && version <= 13 {
+        decoded.throttle_time_ms = Some(reader.read_i32()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = MetadataResponseMetadataResponseBroker::default();
+            item.node_id = reader.read_i32()?;
+            item.host = read_string(&mut reader, flexible)?;
+            item.port = reader.read_i32()?;
+            if version >= 1 && version <= 13 {
+            item.rack = read_nullable_string(&mut reader, flexible)?;
+            }
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.brokers = items_0;
+        if version >= 2 && version <= 13 {
+        decoded.cluster_id = read_nullable_string(&mut reader, flexible)?;
+        }
+        if version >= 1 && version <= 13 {
+        decoded.controller_id = Some(reader.read_i32()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = MetadataResponseMetadataResponseTopic::default();
+            item.error_code = reader.read_i16()?;
+            item.name = read_nullable_string(&mut reader, flexible)?;
+            if version >= 10 && version <= 13 {
+            item.topic_id = Some(reader.read_uuid()?);
+            }
+            if version >= 1 && version <= 13 {
+            item.is_internal = Some(reader.read_bool()?);
+            }
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = MetadataResponseMetadataResponsePartition::default();
+                item.error_code = reader.read_i16()?;
+                item.partition_index = reader.read_i32()?;
+                item.leader_id = reader.read_i32()?;
+                if version >= 7 && version <= 13 {
+                item.leader_epoch = Some(reader.read_i32()?);
+                }
+                let len_2 = read_array_len(&mut reader, flexible)?;
+                let mut items_2 = Vec::with_capacity(len_2);
+                for _ in 0..len_2 {
+                    items_2.push(reader.read_i32()?);
+                }
+                item.replica_nodes = items_2;
+                let len_2 = read_array_len(&mut reader, flexible)?;
+                let mut items_2 = Vec::with_capacity(len_2);
+                for _ in 0..len_2 {
+                    items_2.push(reader.read_i32()?);
+                }
+                item.isr_nodes = items_2;
+                if version >= 5 && version <= 13 {
+                match read_nullable_array_len(&mut reader, flexible)? {
+                    Some(len_2) => {
+                        let mut items_2 = Vec::with_capacity(len_2);
+                        for _ in 0..len_2 {
+                            items_2.push(reader.read_i32()?);
+                        }
+                        item.offline_replicas = Some(items_2);
+                    }
+                    None => {}
+                }
+                }
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if version >= 8 && version <= 13 {
+            item.topic_authorized_operations = Some(reader.read_i32()?);
+            }
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if version >= 8 && version <= 10 {
+        decoded.cluster_authorized_operations = Some(reader.read_i32()?);
+        }
+        if version == 13 {
+        decoded.error_code = Some(reader.read_i16()?);
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const LIST_OFFSETS_REQUEST_MIN_VERSION: i16 = 1;
+#[allow(clippy::all)]
+pub const LIST_OFFSETS_REQUEST_MAX_VERSION: i16 = 10;
+#[allow(clippy::all)]
+pub const LIST_OFFSETS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 6;
+
+#[allow(clippy::all)]
+impl VersionedCodec for ListOffsetsRequest {
+    const API_NAME: &'static str = "ListOffsetsRequest";
+    const MIN_VERSION: i16 = LIST_OFFSETS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = LIST_OFFSETS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_OFFSETS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.replica_id);
+        if version >= 2 && version <= 10 {
+        write_i8(&mut out, self.isolation_level.ok_or(ProtocolError::MissingRequiredField("ListOffsetsRequest.IsolationLevel"))?);
+        }
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_string(&mut out, &item.name, flexible)?;
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i32(&mut out, item.partition_index);
+                if version >= 4 && version <= 10 {
+                write_i32(&mut out, item.current_leader_epoch.ok_or(ProtocolError::MissingRequiredField("ListOffsetsRequest.Topics.Partitions.CurrentLeaderEpoch"))?);
+                }
+                write_i64(&mut out, item.timestamp);
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if version == 10 {
+        write_i32(&mut out, self.timeout_ms.ok_or(ProtocolError::MissingRequiredField("ListOffsetsRequest.TimeoutMs"))?);
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_OFFSETS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.replica_id = reader.read_i32()?;
+        if version >= 2 && version <= 10 {
+        decoded.isolation_level = Some(reader.read_i8()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = ListOffsetsRequestListOffsetsTopic::default();
+            item.name = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = ListOffsetsRequestListOffsetsPartition::default();
+                item.partition_index = reader.read_i32()?;
+                if version >= 4 && version <= 10 {
+                item.current_leader_epoch = Some(reader.read_i32()?);
+                }
+                item.timestamp = reader.read_i64()?;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if version == 10 {
+        decoded.timeout_ms = Some(reader.read_i32()?);
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const LIST_OFFSETS_RESPONSE_MIN_VERSION: i16 = 1;
+#[allow(clippy::all)]
+pub const LIST_OFFSETS_RESPONSE_MAX_VERSION: i16 = 10;
+#[allow(clippy::all)]
+pub const LIST_OFFSETS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 6;
+
+#[allow(clippy::all)]
+impl VersionedCodec for ListOffsetsResponse {
+    const API_NAME: &'static str = "ListOffsetsResponse";
+    const MIN_VERSION: i16 = LIST_OFFSETS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = LIST_OFFSETS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_OFFSETS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        if version >= 2 && version <= 10 {
+        write_i32(&mut out, self.throttle_time_ms.ok_or(ProtocolError::MissingRequiredField("ListOffsetsResponse.ThrottleTimeMs"))?);
+        }
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_string(&mut out, &item.name, flexible)?;
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i32(&mut out, item.partition_index);
+                write_i16(&mut out, item.error_code);
+                write_i64(&mut out, item.timestamp);
+                write_i64(&mut out, item.offset);
+                if version >= 4 && version <= 10 {
+                write_i32(&mut out, item.leader_epoch.ok_or(ProtocolError::MissingRequiredField("ListOffsetsResponse.Topics.Partitions.LeaderEpoch"))?);
+                }
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_OFFSETS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        if version >= 2 && version <= 10 {
+        decoded.throttle_time_ms = Some(reader.read_i32()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = ListOffsetsResponseListOffsetsTopicResponse::default();
+            item.name = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = ListOffsetsResponseListOffsetsPartitionResponse::default();
+                item.partition_index = reader.read_i32()?;
+                item.error_code = reader.read_i16()?;
+                item.timestamp = reader.read_i64()?;
+                item.offset = reader.read_i64()?;
+                if version >= 4 && version <= 10 {
+                item.leader_epoch = Some(reader.read_i32()?);
+                }
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const OFFSET_FOR_LEADER_EPOCH_REQUEST_MIN_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const OFFSET_FOR_LEADER_EPOCH_REQUEST_MAX_VERSION: i16 = 4;
+#[allow(clippy::all)]
+pub const OFFSET_FOR_LEADER_EPOCH_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 4;
+
+#[allow(clippy::all)]
+impl VersionedCodec for OffsetForLeaderEpochRequest {
+    const API_NAME: &'static str = "OffsetForLeaderEpochRequest";
+    const MIN_VERSION: i16 = OFFSET_FOR_LEADER_EPOCH_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = OFFSET_FOR_LEADER_EPOCH_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, OFFSET_FOR_LEADER_EPOCH_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        if version >= 3 && version <= 4 {
+        write_i32(&mut out, self.replica_id.ok_or(ProtocolError::MissingRequiredField("OffsetForLeaderEpochRequest.ReplicaId"))?);
+        }
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_string(&mut out, &item.topic, flexible)?;
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i32(&mut out, item.partition);
+                write_i32(&mut out, item.current_leader_epoch);
+                write_i32(&mut out, item.leader_epoch);
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, OFFSET_FOR_LEADER_EPOCH_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        if version >= 3 && version <= 4 {
+        decoded.replica_id = Some(reader.read_i32()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = OffsetForLeaderEpochRequestOffsetForLeaderTopic::default();
+            item.topic = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = OffsetForLeaderEpochRequestOffsetForLeaderPartition::default();
+                item.partition = reader.read_i32()?;
+                item.current_leader_epoch = reader.read_i32()?;
+                item.leader_epoch = reader.read_i32()?;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const OFFSET_FOR_LEADER_EPOCH_RESPONSE_MIN_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const OFFSET_FOR_LEADER_EPOCH_RESPONSE_MAX_VERSION: i16 = 4;
+#[allow(clippy::all)]
+pub const OFFSET_FOR_LEADER_EPOCH_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 4;
+
+#[allow(clippy::all)]
+impl VersionedCodec for OffsetForLeaderEpochResponse {
+    const API_NAME: &'static str = "OffsetForLeaderEpochResponse";
+    const MIN_VERSION: i16 = OFFSET_FOR_LEADER_EPOCH_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = OFFSET_FOR_LEADER_EPOCH_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, OFFSET_FOR_LEADER_EPOCH_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_string(&mut out, &item.topic, flexible)?;
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i16(&mut out, item.error_code);
+                write_i32(&mut out, item.partition);
+                write_i32(&mut out, item.leader_epoch);
+                write_i64(&mut out, item.end_offset);
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, OFFSET_FOR_LEADER_EPOCH_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = OffsetForLeaderEpochResponseOffsetForLeaderTopicResult::default();
+            item.topic = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = OffsetForLeaderEpochResponseEpochEndOffset::default();
+                item.error_code = reader.read_i16()?;
+                item.partition = reader.read_i32()?;
+                item.leader_epoch = reader.read_i32()?;
+                item.end_offset = reader.read_i64()?;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_CLUSTER_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_CLUSTER_REQUEST_MAX_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const DESCRIBE_CLUSTER_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeClusterRequest {
+    const API_NAME: &'static str = "DescribeClusterRequest";
+    const MIN_VERSION: i16 = DESCRIBE_CLUSTER_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_CLUSTER_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CLUSTER_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_bool(&mut out, self.include_cluster_authorized_operations);
+        if version >= 1 && version <= 2 {
+        write_i8(&mut out, self.endpoint_type.ok_or(ProtocolError::MissingRequiredField("DescribeClusterRequest.EndpointType"))?);
+        }
+        if version == 2 {
+        write_bool(&mut out, self.include_fenced_brokers.unwrap_or(false));
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CLUSTER_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.include_cluster_authorized_operations = reader.read_bool()?;
+        if version >= 1 && version <= 2 {
+        decoded.endpoint_type = Some(reader.read_i8()?);
+        }
+        if version == 2 {
+        decoded.include_fenced_brokers = Some(reader.read_bool()?);
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_CLUSTER_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_CLUSTER_RESPONSE_MAX_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const DESCRIBE_CLUSTER_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeClusterResponse {
+    const API_NAME: &'static str = "DescribeClusterResponse";
+    const MIN_VERSION: i16 = DESCRIBE_CLUSTER_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_CLUSTER_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CLUSTER_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_i16(&mut out, self.error_code);
+        write_nullable_string(&mut out, self.error_message.as_deref(), flexible)?;
+        if version >= 1 && version <= 2 {
+        write_i8(&mut out, self.endpoint_type.ok_or(ProtocolError::MissingRequiredField("DescribeClusterResponse.EndpointType"))?);
+        }
+        write_string(&mut out, &self.cluster_id, flexible)?;
+        write_i32(&mut out, self.controller_id);
+        write_array_len(&mut out, self.brokers.len(), flexible)?;
+        for item in &self.brokers {
+            write_i32(&mut out, item.broker_id);
+            write_string(&mut out, &item.host, flexible)?;
+            write_i32(&mut out, item.port);
+            write_nullable_string(&mut out, item.rack.as_deref(), flexible)?;
+            if version == 2 {
+            write_bool(&mut out, item.is_fenced.unwrap_or(false));
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        write_i32(&mut out, self.cluster_authorized_operations);
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_CLUSTER_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        decoded.error_code = reader.read_i16()?;
+        decoded.error_message = read_nullable_string(&mut reader, flexible)?;
+        if version >= 1 && version <= 2 {
+        decoded.endpoint_type = Some(reader.read_i8()?);
+        }
+        decoded.cluster_id = read_string(&mut reader, flexible)?;
+        decoded.controller_id = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = DescribeClusterResponseDescribeClusterBroker::default();
+            item.broker_id = reader.read_i32()?;
+            item.host = read_string(&mut reader, flexible)?;
+            item.port = reader.read_i32()?;
+            item.rack = read_nullable_string(&mut reader, flexible)?;
+            if version == 2 {
+            item.is_fenced = Some(reader.read_bool()?);
+            }
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.brokers = items_0;
+        decoded.cluster_authorized_operations = reader.read_i32()?;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
