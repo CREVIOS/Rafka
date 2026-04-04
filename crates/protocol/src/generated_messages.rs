@@ -799,3 +799,96 @@ pub struct DescribeClusterResponseDescribeClusterBroker {
     pub is_fenced: Option<bool>,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeProducersRequest {
+    pub topics: Vec<DescribeProducersRequestTopicRequest>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeProducersRequestTopicRequest {
+    pub name: String,
+    pub partition_indexes: Vec<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeProducersResponse {
+    pub throttle_time_ms: i32,
+    pub topics: Vec<DescribeProducersResponseTopicResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeProducersResponseTopicResponse {
+    pub name: String,
+    pub partitions: Vec<DescribeProducersResponsePartitionResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeProducersResponsePartitionResponse {
+    pub partition_index: i32,
+    pub error_code: i16,
+    pub error_message: Option<String>,
+    pub active_producers: Vec<DescribeProducersResponseProducerState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeProducersResponseProducerState {
+    pub producer_id: i64,
+    pub producer_epoch: i32,
+    pub last_sequence: i32,
+    pub last_timestamp: i64,
+    pub coordinator_epoch: i32,
+    pub current_txn_start_offset: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeTransactionsRequest {
+    pub transactional_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeTransactionsResponse {
+    pub throttle_time_ms: i32,
+    pub transaction_states: Vec<DescribeTransactionsResponseTransactionState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeTransactionsResponseTransactionState {
+    pub error_code: i16,
+    pub transactional_id: String,
+    pub transaction_state: String,
+    pub transaction_timeout_ms: i32,
+    pub transaction_start_time_ms: i64,
+    pub producer_id: i64,
+    pub producer_epoch: i16,
+    pub topics: Vec<DescribeTransactionsResponseTopicData>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DescribeTransactionsResponseTopicData {
+    pub topic: String,
+    pub partitions: Vec<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListTransactionsRequest {
+    pub state_filters: Vec<String>,
+    pub producer_id_filters: Vec<i64>,
+    pub duration_filter: Option<i64>,
+    pub transactional_id_pattern: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListTransactionsResponse {
+    pub throttle_time_ms: i32,
+    pub error_code: i16,
+    pub unknown_state_filters: Vec<String>,
+    pub transaction_states: Vec<ListTransactionsResponseTransactionState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ListTransactionsResponseTransactionState {
+    pub transactional_id: String,
+    pub producer_id: i64,
+    pub transaction_state: String,
+}
+

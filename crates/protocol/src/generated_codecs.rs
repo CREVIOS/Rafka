@@ -2093,3 +2093,397 @@ impl VersionedCodec for DescribeClusterResponse {
     }
 }
 
+#[allow(clippy::all)]
+pub const DESCRIBE_PRODUCERS_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_PRODUCERS_REQUEST_MAX_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_PRODUCERS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeProducersRequest {
+    const API_NAME: &'static str = "DescribeProducersRequest";
+    const MIN_VERSION: i16 = DESCRIBE_PRODUCERS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_PRODUCERS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_PRODUCERS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_string(&mut out, &item.name, flexible)?;
+            write_array_len(&mut out, item.partition_indexes.len(), flexible)?;
+            for item in &item.partition_indexes {
+                write_i32(&mut out, *item);
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_PRODUCERS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = DescribeProducersRequestTopicRequest::default();
+            item.name = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                items_1.push(reader.read_i32()?);
+            }
+            item.partition_indexes = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_PRODUCERS_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_PRODUCERS_RESPONSE_MAX_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_PRODUCERS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeProducersResponse {
+    const API_NAME: &'static str = "DescribeProducersResponse";
+    const MIN_VERSION: i16 = DESCRIBE_PRODUCERS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_PRODUCERS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_PRODUCERS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            write_string(&mut out, &item.name, flexible)?;
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i32(&mut out, item.partition_index);
+                write_i16(&mut out, item.error_code);
+                write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
+                write_array_len(&mut out, item.active_producers.len(), flexible)?;
+                for item in &item.active_producers {
+                    write_i64(&mut out, item.producer_id);
+                    write_i32(&mut out, item.producer_epoch);
+                    write_i32(&mut out, item.last_sequence);
+                    write_i64(&mut out, item.last_timestamp);
+                    write_i32(&mut out, item.coordinator_epoch);
+                    write_i64(&mut out, item.current_txn_start_offset);
+                    if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+                }
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_PRODUCERS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = DescribeProducersResponseTopicResponse::default();
+            item.name = read_string(&mut reader, flexible)?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = DescribeProducersResponsePartitionResponse::default();
+                item.partition_index = reader.read_i32()?;
+                item.error_code = reader.read_i16()?;
+                item.error_message = read_nullable_string(&mut reader, flexible)?;
+                let len_2 = read_array_len(&mut reader, flexible)?;
+                let mut items_2 = Vec::with_capacity(len_2);
+                for _ in 0..len_2 {
+                    let mut item = DescribeProducersResponseProducerState::default();
+                    item.producer_id = reader.read_i64()?;
+                    item.producer_epoch = reader.read_i32()?;
+                    item.last_sequence = reader.read_i32()?;
+                    item.last_timestamp = reader.read_i64()?;
+                    item.coordinator_epoch = reader.read_i32()?;
+                    item.current_txn_start_offset = reader.read_i64()?;
+                    if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                    items_2.push(item);
+                }
+                item.active_producers = items_2;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_TRANSACTIONS_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_TRANSACTIONS_REQUEST_MAX_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_TRANSACTIONS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeTransactionsRequest {
+    const API_NAME: &'static str = "DescribeTransactionsRequest";
+    const MIN_VERSION: i16 = DESCRIBE_TRANSACTIONS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_TRANSACTIONS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_TRANSACTIONS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.transactional_ids.len(), flexible)?;
+        for item in &self.transactional_ids {
+            write_string(&mut out, item, flexible)?;
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_TRANSACTIONS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            items_0.push(read_string(&mut reader, flexible)?);
+        }
+        decoded.transactional_ids = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const DESCRIBE_TRANSACTIONS_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_TRANSACTIONS_RESPONSE_MAX_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const DESCRIBE_TRANSACTIONS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for DescribeTransactionsResponse {
+    const API_NAME: &'static str = "DescribeTransactionsResponse";
+    const MIN_VERSION: i16 = DESCRIBE_TRANSACTIONS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = DESCRIBE_TRANSACTIONS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_TRANSACTIONS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_array_len(&mut out, self.transaction_states.len(), flexible)?;
+        for item in &self.transaction_states {
+            write_i16(&mut out, item.error_code);
+            write_string(&mut out, &item.transactional_id, flexible)?;
+            write_string(&mut out, &item.transaction_state, flexible)?;
+            write_i32(&mut out, item.transaction_timeout_ms);
+            write_i64(&mut out, item.transaction_start_time_ms);
+            write_i64(&mut out, item.producer_id);
+            write_i16(&mut out, item.producer_epoch);
+            write_array_len(&mut out, item.topics.len(), flexible)?;
+            for item in &item.topics {
+                write_string(&mut out, &item.topic, flexible)?;
+                write_array_len(&mut out, item.partitions.len(), flexible)?;
+                for item in &item.partitions {
+                    write_i32(&mut out, *item);
+                }
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, DESCRIBE_TRANSACTIONS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = DescribeTransactionsResponseTransactionState::default();
+            item.error_code = reader.read_i16()?;
+            item.transactional_id = read_string(&mut reader, flexible)?;
+            item.transaction_state = read_string(&mut reader, flexible)?;
+            item.transaction_timeout_ms = reader.read_i32()?;
+            item.transaction_start_time_ms = reader.read_i64()?;
+            item.producer_id = reader.read_i64()?;
+            item.producer_epoch = reader.read_i16()?;
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = DescribeTransactionsResponseTopicData::default();
+                item.topic = read_string(&mut reader, flexible)?;
+                let len_2 = read_array_len(&mut reader, flexible)?;
+                let mut items_2 = Vec::with_capacity(len_2);
+                for _ in 0..len_2 {
+                    items_2.push(reader.read_i32()?);
+                }
+                item.partitions = items_2;
+                if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                items_1.push(item);
+            }
+            item.topics = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.transaction_states = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const LIST_TRANSACTIONS_REQUEST_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const LIST_TRANSACTIONS_REQUEST_MAX_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const LIST_TRANSACTIONS_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for ListTransactionsRequest {
+    const API_NAME: &'static str = "ListTransactionsRequest";
+    const MIN_VERSION: i16 = LIST_TRANSACTIONS_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = LIST_TRANSACTIONS_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_TRANSACTIONS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_array_len(&mut out, self.state_filters.len(), flexible)?;
+        for item in &self.state_filters {
+            write_string(&mut out, item, flexible)?;
+        }
+        write_array_len(&mut out, self.producer_id_filters.len(), flexible)?;
+        for item in &self.producer_id_filters {
+            write_i64(&mut out, *item);
+        }
+        if version >= 1 && version <= 2 {
+        write_i64(&mut out, self.duration_filter.ok_or(ProtocolError::MissingRequiredField("ListTransactionsRequest.DurationFilter"))?);
+        }
+        if version == 2 {
+        write_nullable_string(&mut out, self.transactional_id_pattern.as_deref(), flexible)?;
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_TRANSACTIONS_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            items_0.push(read_string(&mut reader, flexible)?);
+        }
+        decoded.state_filters = items_0;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            items_0.push(reader.read_i64()?);
+        }
+        decoded.producer_id_filters = items_0;
+        if version >= 1 && version <= 2 {
+        decoded.duration_filter = Some(reader.read_i64()?);
+        }
+        if version == 2 {
+        decoded.transactional_id_pattern = read_nullable_string(&mut reader, flexible)?;
+        }
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const LIST_TRANSACTIONS_RESPONSE_MIN_VERSION: i16 = 0;
+#[allow(clippy::all)]
+pub const LIST_TRANSACTIONS_RESPONSE_MAX_VERSION: i16 = 2;
+#[allow(clippy::all)]
+pub const LIST_TRANSACTIONS_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 0;
+
+#[allow(clippy::all)]
+impl VersionedCodec for ListTransactionsResponse {
+    const API_NAME: &'static str = "ListTransactionsResponse";
+    const MIN_VERSION: i16 = LIST_TRANSACTIONS_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = LIST_TRANSACTIONS_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_TRANSACTIONS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        write_i16(&mut out, self.error_code);
+        write_array_len(&mut out, self.unknown_state_filters.len(), flexible)?;
+        for item in &self.unknown_state_filters {
+            write_string(&mut out, item, flexible)?;
+        }
+        write_array_len(&mut out, self.transaction_states.len(), flexible)?;
+        for item in &self.transaction_states {
+            write_string(&mut out, &item.transactional_id, flexible)?;
+            write_i64(&mut out, item.producer_id);
+            write_string(&mut out, &item.transaction_state, flexible)?;
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, LIST_TRANSACTIONS_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        decoded.error_code = reader.read_i16()?;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            items_0.push(read_string(&mut reader, flexible)?);
+        }
+        decoded.unknown_state_filters = items_0;
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = ListTransactionsResponseTransactionState::default();
+            item.transactional_id = read_string(&mut reader, flexible)?;
+            item.producer_id = reader.read_i64()?;
+            item.transaction_state = read_string(&mut reader, flexible)?;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.transaction_states = items_0;
+        if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
