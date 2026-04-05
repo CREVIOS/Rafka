@@ -121,6 +121,11 @@ fn write_call(kind: &WireScalar, value: &str) -> String {
 
 /// Emit statements encoding the fields of one struct level from `subject`
 /// into `out`, followed by the trailing tagged-field section when flexible.
+/// Fields with a tagged range are skipped inline and serialized into that
+/// section instead. `in_tagged_payload` marks the top level of a tagged
+/// struct payload: like the JVM, the payload still ends with its own
+/// (usually empty) trailing section, but nested tagged fields inside it are
+/// unsupported.
 #[allow(clippy::too_many_arguments)] // recursive emitter: each arg is used at every level
 fn emit_struct_encode(
     out: &mut String,
@@ -131,8 +136,22 @@ fn emit_struct_encode(
     subject: &str,
     flexible: &str,
     msg_name: &str,
+    in_tagged_payload: bool,
 ) -> Result<(), CodegenError> {
+    let tagged_fields: Vec<&MessageFieldSpec> = fields
+        .iter()
+        .filter(|field| !field.tagged_versions.is_none())
+        .collect();
+    if in_tagged_payload && !tagged_fields.is_empty() {
+        return Err(CodegenError::UnsupportedFieldType(format!(
+            "codec encode: tagged field inside a tagged struct payload: {msg_name}.{}",
+            tagged_fields[0].name
+        )));
+    }
     for field in fields {
+        if !field.tagged_versions.is_none() {
+            continue;
+        }
         if field.versions == parent_versions {
             emit_field_encode(
                 out,
@@ -159,11 +178,150 @@ fn emit_struct_encode(
             let _ = writeln!(out, "{indent}}}");
         }
     }
+    if tagged_fields.is_empty() {
+        let _ = writeln!(
+            out,
+            "{indent}if {flexible} {{ write_tagged_fields(&mut out, Vec::new())?; }}"
+        );
+    } else {
+        let _ = writeln!(out, "{indent}if {flexible} {{");
+        let _ = writeln!(
+            out,
+            "{indent}    let mut tagged_fields: Vec<(u32, Vec<u8>)> = Vec::new();"
+        );
+        for field in &tagged_fields {
+            emit_tagged_field_encode(out, &format!("{indent}    "), top_level, field, subject)?;
+        }
+        let _ = writeln!(
+            out,
+            "{indent}    write_tagged_fields(&mut out, tagged_fields)?;"
+        );
+        let _ = writeln!(out, "{indent}}}");
+    }
+    Ok(())
+}
+
+/// Serialize one tagged field into the enclosing `tagged_fields` vec. The
+/// payload is written into a shadowed `out` buffer with `flexible` forced
+/// true (tagged sections only exist in flexible versions).
+#[allow(clippy::too_many_arguments)]
+fn emit_tagged_field_encode(
+    out: &mut String,
+    indent: &str,
+    top_level: &str,
+    field: &MessageFieldSpec,
+    subject: &str,
+) -> Result<(), CodegenError> {
+    let fname = crate::snake_case_pub(&field.name);
+    let accessor = format!("{subject}.{fname}");
+    let tag = field.tag.ok_or_else(|| {
+        CodegenError::UnsupportedFieldType(format!(
+            "codec encode: tagged field without a tag number: {}",
+            field.name
+        ))
+    })?;
+    // Tagged fields only exist in flexible versions, and each one has its own
+    // taggedVersions range: absent on the wire (not null-encoded) before that
+    // range starts or when the value is None.
+    let tagged_from = field.tagged_versions.low;
     let _ = writeln!(
         out,
-        "{indent}if {flexible} {{ write_tagged_fields(&mut out, Vec::new())?; }}"
+        "{indent}if version >= {tagged_from} && {accessor}.is_some() {{"
     );
+    let inner = format!("{indent}    ");
+    match &field.field_type {
+        FieldTypeSpec::Struct(n) => {
+            if field.fields.is_empty() {
+                return Err(CodegenError::UnsupportedFieldType(format!(
+                    "codec tagged struct without inline fields: {n}"
+                )));
+            }
+            let _ = writeln!(out, "{inner}let v = {accessor}.as_ref().unwrap();");
+            let _ = writeln!(out, "{inner}let mut out = Vec::new();");
+            emit_struct_encode(
+                out,
+                &inner,
+                top_level,
+                &field.fields,
+                field.versions,
+                "v",
+                "true",
+                &field.name,
+                true,
+            )?;
+        }
+        FieldTypeSpec::Array(inner_ty) => {
+            let _ = writeln!(out, "{inner}let v = {accessor}.as_ref().unwrap();");
+            let _ = writeln!(out, "{inner}let mut out = Vec::new();");
+            let _ = writeln!(out, "{inner}write_array_len(&mut out, v.len(), true)?;");
+            emit_array_encode(
+                out,
+                &inner,
+                top_level,
+                inner_ty,
+                field,
+                "v",
+                "true",
+                &field.name,
+            )?;
+        }
+        FieldTypeSpec::String => {
+            let _ = writeln!(out, "{inner}let mut out = Vec::new();");
+            if field_is_nullable(field) {
+                let _ = writeln!(
+                    out,
+                    "{inner}write_nullable_string(&mut out, {accessor}.as_deref(), true)?;"
+                );
+            } else {
+                let _ = writeln!(
+                    out,
+                    "{inner}write_string(&mut out, {accessor}.as_deref().unwrap_or_default(), true)?;"
+                );
+            }
+        }
+        FieldTypeSpec::Bytes | FieldTypeSpec::Records => {
+            let _ = writeln!(out, "{inner}let mut out = Vec::new();");
+            if field_is_nullable(field) {
+                let _ = writeln!(
+                    out,
+                    "{inner}write_nullable_bytes(&mut out, {accessor}.as_deref(), true)?;"
+                );
+            } else {
+                let _ = writeln!(
+                    out,
+                    "{inner}write_bytes(&mut out, {accessor}.as_deref().unwrap_or_default(), true)?;"
+                );
+            }
+        }
+        other => {
+            let Some(kind) = scalar_kind(other) else {
+                return Err(CodegenError::UnsupportedFieldType(format!(
+                    "codec tagged encode: {other:?}"
+                )));
+            };
+            let value = scalar_value_expr(&kind, true, &accessor, &field.name);
+            let _ = writeln!(out, "{inner}let mut out = Vec::new();");
+            let _ = writeln!(out, "{inner}{}", write_call(&kind, &value));
+        }
+    }
+    let _ = writeln!(out, "{inner}tagged_fields.push(({tag}_u32, out));");
+    let _ = writeln!(out, "{indent}}}");
     Ok(())
+}
+
+fn scalar_value_expr(kind: &WireScalar, optional: bool, accessor: &str, label: &str) -> String {
+    if optional {
+        match kind {
+            WireScalar::Bool => format!("{accessor}.unwrap_or(false)"),
+            WireScalar::Uuid => format!("{accessor}.as_ref().unwrap_or(&[0_u8; 16])"),
+            _ => format!("{accessor}.ok_or(ProtocolError::MissingRequiredField(\"{label}\"))?"),
+        }
+    } else {
+        match kind {
+            WireScalar::Uuid => format!("&{accessor}"),
+            _ => accessor.to_string(),
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)] // recursive emitter: each arg is used at every level
@@ -269,6 +427,7 @@ fn emit_field_encode(
                 "subject",
                 flexible,
                 msg_name,
+                false,
             )?;
         }
         other => {
@@ -277,20 +436,7 @@ fn emit_field_encode(
                     "codec encode: {other:?}"
                 )));
             };
-            let value = if optional {
-                match kind {
-                    WireScalar::Bool => format!("{accessor}.unwrap_or(false)"),
-                    WireScalar::Uuid => format!("{accessor}.as_ref().unwrap_or(&[0_u8; 16])"),
-                    _ => format!(
-                        "{accessor}.ok_or(ProtocolError::MissingRequiredField(\"{label}\"))?"
-                    ),
-                }
-            } else {
-                match kind {
-                    WireScalar::Uuid => format!("&{accessor}"),
-                    _ => accessor.clone(),
-                }
-            };
+            let value = scalar_value_expr(&kind, optional, &accessor, &label);
             let _ = writeln!(out, "{indent}{}", write_call(&kind, &value));
         }
     }
@@ -320,6 +466,7 @@ fn emit_array_encode(
                 "item",
                 flexible,
                 label,
+                false,
             )?;
         }
         FieldTypeSpec::String => {
@@ -357,7 +504,10 @@ fn emit_array_encode(
 
 /// Emit statements decoding the fields of one struct level from `reader`
 /// into `subject`, followed by the trailing tagged-field section when
-/// flexible.
+/// flexible. Tagged fields are captured from that section and decoded from
+/// shadowed readers. `in_tagged_payload` mirrors the encode side: a tagged
+/// struct payload still consumes its own trailing section, but nested tagged
+/// fields inside it are unsupported.
 #[allow(clippy::too_many_arguments)] // recursive emitter: each arg is used at every level
 fn emit_struct_decode(
     out: &mut String,
@@ -368,8 +518,22 @@ fn emit_struct_decode(
     subject: &str,
     flexible: &str,
     depth: usize,
+    in_tagged_payload: bool,
 ) -> Result<(), CodegenError> {
+    let tagged_fields: Vec<&MessageFieldSpec> = fields
+        .iter()
+        .filter(|field| !field.tagged_versions.is_none())
+        .collect();
+    if in_tagged_payload && !tagged_fields.is_empty() {
+        return Err(CodegenError::UnsupportedFieldType(format!(
+            "codec decode: tagged field inside a tagged struct payload: {top_level}.{}",
+            tagged_fields[0].name
+        )));
+    }
     for field in fields {
+        if !field.tagged_versions.is_none() {
+            continue;
+        }
         if field.versions == parent_versions {
             emit_field_decode(
                 out,
@@ -396,10 +560,139 @@ fn emit_struct_decode(
             let _ = writeln!(out, "{indent}}}");
         }
     }
+    if tagged_fields.is_empty() {
+        let _ = writeln!(
+            out,
+            "{indent}if {flexible} {{ read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }}"
+        );
+        return Ok(());
+    }
+    let _ = writeln!(out, "{indent}if {flexible} {{");
+    let section = format!("{indent}    ");
+    for field in &tagged_fields {
+        let fname = crate::snake_case_pub(&field.name);
+        let _ = writeln!(
+            out,
+            "{section}let mut t_{fname}_payload: Option<Vec<u8>> = None;"
+        );
+    }
     let _ = writeln!(
         out,
-        "{indent}if {flexible} {{ read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }}"
+        "{section}read_tagged_fields(&mut reader, |tag, payload| {{"
     );
+    let _ = writeln!(out, "{section}    match tag {{");
+    for field in &tagged_fields {
+        let fname = crate::snake_case_pub(&field.name);
+        let tag = field.tag.ok_or_else(|| {
+            CodegenError::UnsupportedFieldType(format!(
+                "codec decode: tagged field without a tag number: {}",
+                field.name
+            ))
+        })?;
+        let tagged_from = field.tagged_versions.low;
+        let _ = writeln!(
+            out,
+            "{section}        {tag} if version >= {tagged_from} => t_{fname}_payload = Some(payload.to_vec()),"
+        );
+    }
+    let _ = writeln!(out, "{section}        _ => {{}}");
+    let _ = writeln!(out, "{section}    }}");
+    let _ = writeln!(out, "{section}    Ok(())");
+    let _ = writeln!(out, "{section}}})?;");
+    for field in &tagged_fields {
+        emit_tagged_field_decode(out, &section, top_level, field, subject, depth)?;
+    }
+    let _ = writeln!(out, "{indent}}}");
+    Ok(())
+}
+
+/// Decode one captured tagged payload from a shadowed reader and store it in
+/// `subject`. Tagged fields are Option-wrapped in the struct, so the payload
+/// is only decoded when present; unknown/absent tags leave the field None.
+#[allow(clippy::too_many_arguments)]
+fn emit_tagged_field_decode(
+    out: &mut String,
+    indent: &str,
+    top_level: &str,
+    field: &MessageFieldSpec,
+    subject: &str,
+    depth: usize,
+) -> Result<(), CodegenError> {
+    let fname = crate::snake_case_pub(&field.name);
+    let payload_var = format!("t_{fname}_payload");
+    let _ = writeln!(out, "{indent}if let Some(payload) = {payload_var} {{");
+    let inner = format!("{indent}    ");
+    let _ = writeln!(out, "{inner}let mut reader = Reader::new(&payload);");
+    match &field.field_type {
+        FieldTypeSpec::Struct(n) => {
+            let nested_name = crate::nested_struct_name_pub(top_level, n);
+            let _ = writeln!(out, "{inner}let mut nested = {nested_name}::default();");
+            emit_struct_decode(
+                out,
+                &inner,
+                top_level,
+                &field.fields,
+                field.versions,
+                "nested",
+                "true",
+                depth,
+                true,
+            )?;
+            let _ = writeln!(out, "{inner}{subject}.{fname} = Some(nested);");
+        }
+        FieldTypeSpec::Array(inner_ty) => {
+            let items = format!("items_{depth}");
+            let len = format!("len_{depth}");
+            let _ = writeln!(
+                out,
+                "{inner}let {len} = read_array_len(&mut reader, true)?;"
+            );
+            let _ = writeln!(out, "{inner}let mut {items} = Vec::with_capacity({len});");
+            emit_array_decode(
+                out, &inner, top_level, inner_ty, field, "true", &items, depth,
+            )?;
+            let _ = writeln!(out, "{inner}{subject}.{fname} = Some({items});");
+        }
+        FieldTypeSpec::String => {
+            if field_is_nullable(field) {
+                let _ = writeln!(
+                    out,
+                    "{inner}{subject}.{fname} = read_nullable_string(&mut reader, true)?;"
+                );
+            } else {
+                let _ = writeln!(
+                    out,
+                    "{inner}{subject}.{fname} = Some(read_string(&mut reader, true)?);"
+                );
+            }
+        }
+        FieldTypeSpec::Bytes | FieldTypeSpec::Records => {
+            if field_is_nullable(field) {
+                let _ = writeln!(
+                    out,
+                    "{inner}{subject}.{fname} = read_nullable_bytes(&mut reader, true)?;"
+                );
+            } else {
+                let _ = writeln!(
+                    out,
+                    "{inner}{subject}.{fname} = Some(read_bytes(&mut reader, true)?);"
+                );
+            }
+        }
+        other => {
+            let Some(kind) = scalar_kind(other) else {
+                return Err(CodegenError::UnsupportedFieldType(format!(
+                    "codec tagged decode: {other:?}"
+                )));
+            };
+            let _ = writeln!(
+                out,
+                "{inner}{subject}.{fname} = Some({});",
+                read_call(&kind)
+            );
+        }
+    }
+    let _ = writeln!(out, "{indent}}}");
     Ok(())
 }
 
@@ -509,6 +802,7 @@ fn emit_field_decode(
                 "nested",
                 flexible,
                 depth,
+                false,
             )?;
             let _ = writeln!(out, "{indent}{}", assign("nested"));
         }
@@ -549,6 +843,7 @@ fn emit_array_decode(
                 "item",
                 flexible,
                 depth + 1,
+                false,
             )?;
             let _ = writeln!(out, "{indent}    {items}.push(item);");
         }
@@ -664,6 +959,7 @@ fn emit_codec_impl(out: &mut String, spec: &ProtocolMessageSpec) -> Result<(), C
         "self",
         "flexible",
         name,
+        false,
     )?;
     let _ = writeln!(out, "        Ok(out)");
     let _ = writeln!(out, "    }}");
@@ -691,6 +987,7 @@ fn emit_codec_impl(out: &mut String, spec: &ProtocolMessageSpec) -> Result<(), C
         "decoded",
         "flexible",
         0,
+        false,
     )?;
     let _ = writeln!(out, "        Ok((decoded, reader.cursor))");
     let _ = writeln!(out, "    }}");

@@ -331,7 +331,6 @@ fn create_topics_response_v7_known_bytes() {
     expected.extend_from_slice(&[
         0, 0,    // error_code
         0x00, // error_message null (compact nullable string)
-        0, 0, // topic_config_error_code
         0, 0, 0, 1, // num_partitions
         0, 1,    // replication_factor
         0x02, // configs compact len 1+1
@@ -341,7 +340,10 @@ fn create_topics_response_v7_known_bytes() {
         1,    // config_source (int8)
         0x00, // is_sensitive
         0x00, // config element tagged section
-        0x00, // topic element tagged section
+        0x01, // topic element tagged section count 1
+        0x00, // tag 0: TopicConfigErrorCode (tagged from v5)
+        0x02, // payload size 2
+        0, 0,    // topic_config_error_code
         0x00, // top-level tagged section
     ]);
     assert_eq!(encoded, expected);

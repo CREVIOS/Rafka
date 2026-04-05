@@ -347,9 +347,6 @@ impl VersionedCodec for CreateTopicsResponse {
             write_i16(&mut out, item.error_code);
             write_nullable_string(&mut out, item.error_message.as_deref(), flexible)?;
             if version >= 5 && version <= 7 {
-            write_i16(&mut out, item.topic_config_error_code.ok_or(ProtocolError::MissingRequiredField("CreateTopicsResponse.Topics.TopicConfigErrorCode"))?);
-            }
-            if version >= 5 && version <= 7 {
             write_i32(&mut out, item.num_partitions.ok_or(ProtocolError::MissingRequiredField("CreateTopicsResponse.Topics.NumPartitions"))?);
             }
             if version >= 5 && version <= 7 {
@@ -368,7 +365,15 @@ impl VersionedCodec for CreateTopicsResponse {
                 }
             }
             }
-            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            if flexible {
+                let mut tagged_fields: Vec<(u32, Vec<u8>)> = Vec::new();
+                if version >= 5 && item.topic_config_error_code.is_some() {
+                    let mut out = Vec::new();
+                    write_i16(&mut out, item.topic_config_error_code.ok_or(ProtocolError::MissingRequiredField("TopicConfigErrorCode"))?);
+                    tagged_fields.push((0_u32, out));
+                }
+                write_tagged_fields(&mut out, tagged_fields)?;
+            }
         }
         if flexible { write_tagged_fields(&mut out, Vec::new())?; }
         Ok(out)
@@ -390,9 +395,6 @@ impl VersionedCodec for CreateTopicsResponse {
             }
             item.error_code = reader.read_i16()?;
             item.error_message = read_nullable_string(&mut reader, flexible)?;
-            if version >= 5 && version <= 7 {
-            item.topic_config_error_code = Some(reader.read_i16()?);
-            }
             if version >= 5 && version <= 7 {
             item.num_partitions = Some(reader.read_i32()?);
             }
@@ -418,7 +420,20 @@ impl VersionedCodec for CreateTopicsResponse {
                 None => {}
             }
             }
-            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            if flexible {
+                let mut t_topic_config_error_code_payload: Option<Vec<u8>> = None;
+                read_tagged_fields(&mut reader, |tag, payload| {
+                    match tag {
+                        0 if version >= 5 => t_topic_config_error_code_payload = Some(payload.to_vec()),
+                        _ => {}
+                    }
+                    Ok(())
+                })?;
+                if let Some(payload) = t_topic_config_error_code_payload {
+                    let mut reader = Reader::new(&payload);
+                    item.topic_config_error_code = Some(reader.read_i16()?);
+                }
+            }
             items_0.push(item);
         }
         decoded.topics = items_0;
@@ -2483,6 +2498,473 @@ impl VersionedCodec for ListTransactionsResponse {
         }
         decoded.transaction_states = items_0;
         if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const FETCH_REQUEST_MIN_VERSION: i16 = 4;
+#[allow(clippy::all)]
+pub const FETCH_REQUEST_MAX_VERSION: i16 = 18;
+#[allow(clippy::all)]
+pub const FETCH_REQUEST_FIRST_FLEXIBLE_VERSION: i16 = 12;
+
+#[allow(clippy::all)]
+impl VersionedCodec for FetchRequest {
+    const API_NAME: &'static str = "FetchRequest";
+    const MIN_VERSION: i16 = FETCH_REQUEST_MIN_VERSION;
+    const MAX_VERSION: i16 = FETCH_REQUEST_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FETCH_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        if version >= 4 && version <= 14 {
+        write_i32(&mut out, self.replica_id.ok_or(ProtocolError::MissingRequiredField("FetchRequest.ReplicaId"))?);
+        }
+        write_i32(&mut out, self.max_wait_ms);
+        write_i32(&mut out, self.min_bytes);
+        write_i32(&mut out, self.max_bytes);
+        write_i8(&mut out, self.isolation_level);
+        if version >= 7 && version <= 18 {
+        write_i32(&mut out, self.session_id.ok_or(ProtocolError::MissingRequiredField("FetchRequest.SessionId"))?);
+        }
+        if version >= 7 && version <= 18 {
+        write_i32(&mut out, self.session_epoch.ok_or(ProtocolError::MissingRequiredField("FetchRequest.SessionEpoch"))?);
+        }
+        write_array_len(&mut out, self.topics.len(), flexible)?;
+        for item in &self.topics {
+            if version >= 4 && version <= 12 {
+            write_string(&mut out, item.topic.as_deref().unwrap_or_default(), flexible)?;
+            }
+            if version >= 13 && version <= 18 {
+            write_uuid(&mut out, item.topic_id.as_ref().unwrap_or(&[0_u8; 16]));
+            }
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i32(&mut out, item.partition);
+                if version >= 9 && version <= 18 {
+                write_i32(&mut out, item.current_leader_epoch.ok_or(ProtocolError::MissingRequiredField("FetchRequest.Topics.Partitions.CurrentLeaderEpoch"))?);
+                }
+                write_i64(&mut out, item.fetch_offset);
+                if version >= 12 && version <= 18 {
+                write_i32(&mut out, item.last_fetched_epoch.ok_or(ProtocolError::MissingRequiredField("FetchRequest.Topics.Partitions.LastFetchedEpoch"))?);
+                }
+                if version >= 5 && version <= 18 {
+                write_i64(&mut out, item.log_start_offset.ok_or(ProtocolError::MissingRequiredField("FetchRequest.Topics.Partitions.LogStartOffset"))?);
+                }
+                write_i32(&mut out, item.partition_max_bytes);
+                if flexible {
+                    let mut tagged_fields: Vec<(u32, Vec<u8>)> = Vec::new();
+                    if version >= 17 && item.replica_directory_id.is_some() {
+                        let mut out = Vec::new();
+                        write_uuid(&mut out, item.replica_directory_id.as_ref().unwrap_or(&[0_u8; 16]));
+                        tagged_fields.push((0_u32, out));
+                    }
+                    if version >= 18 && item.high_watermark.is_some() {
+                        let mut out = Vec::new();
+                        write_i64(&mut out, item.high_watermark.ok_or(ProtocolError::MissingRequiredField("HighWatermark"))?);
+                        tagged_fields.push((1_u32, out));
+                    }
+                    write_tagged_fields(&mut out, tagged_fields)?;
+                }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if version >= 7 && version <= 18 {
+        write_nullable_array_len(&mut out, self.forgotten_topics_data.as_ref().map(Vec::len), flexible)?;
+        if let Some(items) = self.forgotten_topics_data.as_ref() {
+            for item in items {
+                if version >= 7 && version <= 12 {
+                write_string(&mut out, item.topic.as_deref().unwrap_or_default(), flexible)?;
+                }
+                if version >= 13 && version <= 18 {
+                write_uuid(&mut out, item.topic_id.as_ref().unwrap_or(&[0_u8; 16]));
+                }
+                write_array_len(&mut out, item.partitions.len(), flexible)?;
+                for item in &item.partitions {
+                    write_i32(&mut out, *item);
+                }
+                if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+            }
+        }
+        }
+        if version >= 11 && version <= 18 {
+        write_string(&mut out, self.rack_id.as_deref().unwrap_or_default(), flexible)?;
+        }
+        if flexible {
+            let mut tagged_fields: Vec<(u32, Vec<u8>)> = Vec::new();
+            if version >= 12 && self.cluster_id.is_some() {
+                let mut out = Vec::new();
+                write_nullable_string(&mut out, self.cluster_id.as_deref(), true)?;
+                tagged_fields.push((0_u32, out));
+            }
+            if version >= 15 && self.replica_state.is_some() {
+                let v = self.replica_state.as_ref().unwrap();
+                let mut out = Vec::new();
+                write_i32(&mut out, v.replica_id);
+                write_i64(&mut out, v.replica_epoch);
+                if true { write_tagged_fields(&mut out, Vec::new())?; }
+                tagged_fields.push((1_u32, out));
+            }
+            write_tagged_fields(&mut out, tagged_fields)?;
+        }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FETCH_REQUEST_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        if version >= 4 && version <= 14 {
+        decoded.replica_id = Some(reader.read_i32()?);
+        }
+        decoded.max_wait_ms = reader.read_i32()?;
+        decoded.min_bytes = reader.read_i32()?;
+        decoded.max_bytes = reader.read_i32()?;
+        decoded.isolation_level = reader.read_i8()?;
+        if version >= 7 && version <= 18 {
+        decoded.session_id = Some(reader.read_i32()?);
+        }
+        if version >= 7 && version <= 18 {
+        decoded.session_epoch = Some(reader.read_i32()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = FetchRequestFetchTopic::default();
+            if version >= 4 && version <= 12 {
+            item.topic = Some(read_string(&mut reader, flexible)?);
+            }
+            if version >= 13 && version <= 18 {
+            item.topic_id = Some(reader.read_uuid()?);
+            }
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = FetchRequestFetchPartition::default();
+                item.partition = reader.read_i32()?;
+                if version >= 9 && version <= 18 {
+                item.current_leader_epoch = Some(reader.read_i32()?);
+                }
+                item.fetch_offset = reader.read_i64()?;
+                if version >= 12 && version <= 18 {
+                item.last_fetched_epoch = Some(reader.read_i32()?);
+                }
+                if version >= 5 && version <= 18 {
+                item.log_start_offset = Some(reader.read_i64()?);
+                }
+                item.partition_max_bytes = reader.read_i32()?;
+                if flexible {
+                    let mut t_replica_directory_id_payload: Option<Vec<u8>> = None;
+                    let mut t_high_watermark_payload: Option<Vec<u8>> = None;
+                    read_tagged_fields(&mut reader, |tag, payload| {
+                        match tag {
+                            0 if version >= 17 => t_replica_directory_id_payload = Some(payload.to_vec()),
+                            1 if version >= 18 => t_high_watermark_payload = Some(payload.to_vec()),
+                            _ => {}
+                        }
+                        Ok(())
+                    })?;
+                    if let Some(payload) = t_replica_directory_id_payload {
+                        let mut reader = Reader::new(&payload);
+                        item.replica_directory_id = Some(reader.read_uuid()?);
+                    }
+                    if let Some(payload) = t_high_watermark_payload {
+                        let mut reader = Reader::new(&payload);
+                        item.high_watermark = Some(reader.read_i64()?);
+                    }
+                }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.topics = items_0;
+        if version >= 7 && version <= 18 {
+        match read_nullable_array_len(&mut reader, flexible)? {
+            Some(len_0) => {
+                let mut items_0 = Vec::with_capacity(len_0);
+                for _ in 0..len_0 {
+                    let mut item = FetchRequestForgottenTopic::default();
+                    if version >= 7 && version <= 12 {
+                    item.topic = Some(read_string(&mut reader, flexible)?);
+                    }
+                    if version >= 13 && version <= 18 {
+                    item.topic_id = Some(reader.read_uuid()?);
+                    }
+                    let len_1 = read_array_len(&mut reader, flexible)?;
+                    let mut items_1 = Vec::with_capacity(len_1);
+                    for _ in 0..len_1 {
+                        items_1.push(reader.read_i32()?);
+                    }
+                    item.partitions = items_1;
+                    if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                    items_0.push(item);
+                }
+                decoded.forgotten_topics_data = Some(items_0);
+            }
+            None => {}
+        }
+        }
+        if version >= 11 && version <= 18 {
+        decoded.rack_id = Some(read_string(&mut reader, flexible)?);
+        }
+        if flexible {
+            let mut t_cluster_id_payload: Option<Vec<u8>> = None;
+            let mut t_replica_state_payload: Option<Vec<u8>> = None;
+            read_tagged_fields(&mut reader, |tag, payload| {
+                match tag {
+                    0 if version >= 12 => t_cluster_id_payload = Some(payload.to_vec()),
+                    1 if version >= 15 => t_replica_state_payload = Some(payload.to_vec()),
+                    _ => {}
+                }
+                Ok(())
+            })?;
+            if let Some(payload) = t_cluster_id_payload {
+                let mut reader = Reader::new(&payload);
+                decoded.cluster_id = read_nullable_string(&mut reader, true)?;
+            }
+            if let Some(payload) = t_replica_state_payload {
+                let mut reader = Reader::new(&payload);
+                let mut nested = FetchRequestReplicaState::default();
+                nested.replica_id = reader.read_i32()?;
+                nested.replica_epoch = reader.read_i64()?;
+                if true { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                decoded.replica_state = Some(nested);
+            }
+        }
+        Ok((decoded, reader.cursor))
+    }
+}
+
+#[allow(clippy::all)]
+pub const FETCH_RESPONSE_MIN_VERSION: i16 = 4;
+#[allow(clippy::all)]
+pub const FETCH_RESPONSE_MAX_VERSION: i16 = 18;
+#[allow(clippy::all)]
+pub const FETCH_RESPONSE_FIRST_FLEXIBLE_VERSION: i16 = 12;
+
+#[allow(clippy::all)]
+impl VersionedCodec for FetchResponse {
+    const API_NAME: &'static str = "FetchResponse";
+    const MIN_VERSION: i16 = FETCH_RESPONSE_MIN_VERSION;
+    const MAX_VERSION: i16 = FETCH_RESPONSE_MAX_VERSION;
+
+    fn encode(&self, version: i16) -> Result<Vec<u8>, ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FETCH_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut out = Vec::new();
+        write_i32(&mut out, self.throttle_time_ms);
+        if version >= 7 && version <= 18 {
+        write_i16(&mut out, self.error_code.ok_or(ProtocolError::MissingRequiredField("FetchResponse.ErrorCode"))?);
+        }
+        if version >= 7 && version <= 18 {
+        write_i32(&mut out, self.session_id.ok_or(ProtocolError::MissingRequiredField("FetchResponse.SessionId"))?);
+        }
+        write_array_len(&mut out, self.responses.len(), flexible)?;
+        for item in &self.responses {
+            if version >= 4 && version <= 12 {
+            write_string(&mut out, item.topic.as_deref().unwrap_or_default(), flexible)?;
+            }
+            if version >= 13 && version <= 18 {
+            write_uuid(&mut out, item.topic_id.as_ref().unwrap_or(&[0_u8; 16]));
+            }
+            write_array_len(&mut out, item.partitions.len(), flexible)?;
+            for item in &item.partitions {
+                write_i32(&mut out, item.partition_index);
+                write_i16(&mut out, item.error_code);
+                write_i64(&mut out, item.high_watermark);
+                write_i64(&mut out, item.last_stable_offset);
+                if version >= 5 && version <= 18 {
+                write_i64(&mut out, item.log_start_offset.ok_or(ProtocolError::MissingRequiredField("FetchResponse.Responses.Partitions.LogStartOffset"))?);
+                }
+                write_nullable_array_len(&mut out, item.aborted_transactions.as_ref().map(Vec::len), flexible)?;
+                if let Some(items) = item.aborted_transactions.as_ref() {
+                    for item in items {
+                        write_i64(&mut out, item.producer_id);
+                        write_i64(&mut out, item.first_offset);
+                        if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+                    }
+                }
+                if version >= 11 && version <= 18 {
+                write_i32(&mut out, item.preferred_read_replica.ok_or(ProtocolError::MissingRequiredField("FetchResponse.Responses.Partitions.PreferredReadReplica"))?);
+                }
+                write_nullable_bytes(&mut out, item.records.as_deref(), flexible)?;
+                if flexible {
+                    let mut tagged_fields: Vec<(u32, Vec<u8>)> = Vec::new();
+                    if version >= 12 && item.diverging_epoch.is_some() {
+                        let v = item.diverging_epoch.as_ref().unwrap();
+                        let mut out = Vec::new();
+                        write_i32(&mut out, v.epoch);
+                        write_i64(&mut out, v.end_offset);
+                        if true { write_tagged_fields(&mut out, Vec::new())?; }
+                        tagged_fields.push((0_u32, out));
+                    }
+                    if version >= 12 && item.current_leader.is_some() {
+                        let v = item.current_leader.as_ref().unwrap();
+                        let mut out = Vec::new();
+                        write_i32(&mut out, v.leader_id);
+                        write_i32(&mut out, v.leader_epoch);
+                        if true { write_tagged_fields(&mut out, Vec::new())?; }
+                        tagged_fields.push((1_u32, out));
+                    }
+                    if version >= 12 && item.snapshot_id.is_some() {
+                        let v = item.snapshot_id.as_ref().unwrap();
+                        let mut out = Vec::new();
+                        write_i64(&mut out, v.end_offset);
+                        write_i32(&mut out, v.epoch);
+                        if true { write_tagged_fields(&mut out, Vec::new())?; }
+                        tagged_fields.push((2_u32, out));
+                    }
+                    write_tagged_fields(&mut out, tagged_fields)?;
+                }
+            }
+            if flexible { write_tagged_fields(&mut out, Vec::new())?; }
+        }
+        if flexible {
+            let mut tagged_fields: Vec<(u32, Vec<u8>)> = Vec::new();
+            if version >= 16 && self.node_endpoints.is_some() {
+                let v = self.node_endpoints.as_ref().unwrap();
+                let mut out = Vec::new();
+                write_array_len(&mut out, v.len(), true)?;
+                for item in v {
+                    write_i32(&mut out, item.node_id);
+                    write_string(&mut out, &item.host, true)?;
+                    write_i32(&mut out, item.port);
+                    write_nullable_string(&mut out, item.rack.as_deref(), true)?;
+                    if true { write_tagged_fields(&mut out, Vec::new())?; }
+                }
+                tagged_fields.push((0_u32, out));
+            }
+            write_tagged_fields(&mut out, tagged_fields)?;
+        }
+        Ok(out)
+    }
+
+    fn decode(version: i16, input: &[u8]) -> Result<(Self, usize), ProtocolError> {
+        ensure_version(Self::API_NAME, version, Self::MIN_VERSION, Self::MAX_VERSION)?;
+        let flexible = is_flexible(version, FETCH_RESPONSE_FIRST_FLEXIBLE_VERSION);
+        let mut reader = Reader::new(input);
+        let mut decoded = Self::default();
+        decoded.throttle_time_ms = reader.read_i32()?;
+        if version >= 7 && version <= 18 {
+        decoded.error_code = Some(reader.read_i16()?);
+        }
+        if version >= 7 && version <= 18 {
+        decoded.session_id = Some(reader.read_i32()?);
+        }
+        let len_0 = read_array_len(&mut reader, flexible)?;
+        let mut items_0 = Vec::with_capacity(len_0);
+        for _ in 0..len_0 {
+            let mut item = FetchResponseFetchableTopicResponse::default();
+            if version >= 4 && version <= 12 {
+            item.topic = Some(read_string(&mut reader, flexible)?);
+            }
+            if version >= 13 && version <= 18 {
+            item.topic_id = Some(reader.read_uuid()?);
+            }
+            let len_1 = read_array_len(&mut reader, flexible)?;
+            let mut items_1 = Vec::with_capacity(len_1);
+            for _ in 0..len_1 {
+                let mut item = FetchResponsePartitionData::default();
+                item.partition_index = reader.read_i32()?;
+                item.error_code = reader.read_i16()?;
+                item.high_watermark = reader.read_i64()?;
+                item.last_stable_offset = reader.read_i64()?;
+                if version >= 5 && version <= 18 {
+                item.log_start_offset = Some(reader.read_i64()?);
+                }
+                match read_nullable_array_len(&mut reader, flexible)? {
+                    Some(len_2) => {
+                        let mut items_2 = Vec::with_capacity(len_2);
+                        for _ in 0..len_2 {
+                            let mut item = FetchResponseAbortedTransaction::default();
+                            item.producer_id = reader.read_i64()?;
+                            item.first_offset = reader.read_i64()?;
+                            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                            items_2.push(item);
+                        }
+                        item.aborted_transactions = Some(items_2);
+                    }
+                    None => {}
+                }
+                if version >= 11 && version <= 18 {
+                item.preferred_read_replica = Some(reader.read_i32()?);
+                }
+                item.records = read_nullable_bytes(&mut reader, flexible)?;
+                if flexible {
+                    let mut t_diverging_epoch_payload: Option<Vec<u8>> = None;
+                    let mut t_current_leader_payload: Option<Vec<u8>> = None;
+                    let mut t_snapshot_id_payload: Option<Vec<u8>> = None;
+                    read_tagged_fields(&mut reader, |tag, payload| {
+                        match tag {
+                            0 if version >= 12 => t_diverging_epoch_payload = Some(payload.to_vec()),
+                            1 if version >= 12 => t_current_leader_payload = Some(payload.to_vec()),
+                            2 if version >= 12 => t_snapshot_id_payload = Some(payload.to_vec()),
+                            _ => {}
+                        }
+                        Ok(())
+                    })?;
+                    if let Some(payload) = t_diverging_epoch_payload {
+                        let mut reader = Reader::new(&payload);
+                        let mut nested = FetchResponseEpochEndOffset::default();
+                        nested.epoch = reader.read_i32()?;
+                        nested.end_offset = reader.read_i64()?;
+                        if true { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                        item.diverging_epoch = Some(nested);
+                    }
+                    if let Some(payload) = t_current_leader_payload {
+                        let mut reader = Reader::new(&payload);
+                        let mut nested = FetchResponseLeaderIdAndEpoch::default();
+                        nested.leader_id = reader.read_i32()?;
+                        nested.leader_epoch = reader.read_i32()?;
+                        if true { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                        item.current_leader = Some(nested);
+                    }
+                    if let Some(payload) = t_snapshot_id_payload {
+                        let mut reader = Reader::new(&payload);
+                        let mut nested = FetchResponseSnapshotId::default();
+                        nested.end_offset = reader.read_i64()?;
+                        nested.epoch = reader.read_i32()?;
+                        if true { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                        item.snapshot_id = Some(nested);
+                    }
+                }
+                items_1.push(item);
+            }
+            item.partitions = items_1;
+            if flexible { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+            items_0.push(item);
+        }
+        decoded.responses = items_0;
+        if flexible {
+            let mut t_node_endpoints_payload: Option<Vec<u8>> = None;
+            read_tagged_fields(&mut reader, |tag, payload| {
+                match tag {
+                    0 if version >= 16 => t_node_endpoints_payload = Some(payload.to_vec()),
+                    _ => {}
+                }
+                Ok(())
+            })?;
+            if let Some(payload) = t_node_endpoints_payload {
+                let mut reader = Reader::new(&payload);
+                let len_0 = read_array_len(&mut reader, true)?;
+                let mut items_0 = Vec::with_capacity(len_0);
+                for _ in 0..len_0 {
+                    let mut item = FetchResponseNodeEndpoint::default();
+                    item.node_id = reader.read_i32()?;
+                    item.host = read_string(&mut reader, true)?;
+                    item.port = reader.read_i32()?;
+                    item.rack = read_nullable_string(&mut reader, true)?;
+                    if true { read_tagged_fields(&mut reader, |_tag, _payload| Ok(()))?; }
+                    items_0.push(item);
+                }
+                decoded.node_endpoints = Some(items_0);
+            }
+        }
         Ok((decoded, reader.cursor))
     }
 }
