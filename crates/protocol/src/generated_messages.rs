@@ -892,3 +892,114 @@ pub struct ListTransactionsResponseTransactionState {
     pub transaction_state: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchRequest {
+    pub cluster_id: Option<String>,
+    pub replica_id: Option<i32>,
+    pub replica_state: Option<FetchRequestReplicaState>,
+    pub max_wait_ms: i32,
+    pub min_bytes: i32,
+    pub max_bytes: i32,
+    pub isolation_level: i8,
+    pub session_id: Option<i32>,
+    pub session_epoch: Option<i32>,
+    pub topics: Vec<FetchRequestFetchTopic>,
+    pub forgotten_topics_data: Option<Vec<FetchRequestForgottenTopic>>,
+    pub rack_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchRequestReplicaState {
+    pub replica_id: i32,
+    pub replica_epoch: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchRequestFetchTopic {
+    pub topic: Option<String>,
+    pub topic_id: Option<[u8; 16]>,
+    pub partitions: Vec<FetchRequestFetchPartition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchRequestFetchPartition {
+    pub partition: i32,
+    pub current_leader_epoch: Option<i32>,
+    pub fetch_offset: i64,
+    pub last_fetched_epoch: Option<i32>,
+    pub log_start_offset: Option<i64>,
+    pub partition_max_bytes: i32,
+    pub replica_directory_id: Option<[u8; 16]>,
+    pub high_watermark: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchRequestForgottenTopic {
+    pub topic: Option<String>,
+    pub topic_id: Option<[u8; 16]>,
+    pub partitions: Vec<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponse {
+    pub throttle_time_ms: i32,
+    pub error_code: Option<i16>,
+    pub session_id: Option<i32>,
+    pub responses: Vec<FetchResponseFetchableTopicResponse>,
+    pub node_endpoints: Option<Vec<FetchResponseNodeEndpoint>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponseFetchableTopicResponse {
+    pub topic: Option<String>,
+    pub topic_id: Option<[u8; 16]>,
+    pub partitions: Vec<FetchResponsePartitionData>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponsePartitionData {
+    pub partition_index: i32,
+    pub error_code: i16,
+    pub high_watermark: i64,
+    pub last_stable_offset: i64,
+    pub log_start_offset: Option<i64>,
+    pub diverging_epoch: Option<FetchResponseEpochEndOffset>,
+    pub current_leader: Option<FetchResponseLeaderIdAndEpoch>,
+    pub snapshot_id: Option<FetchResponseSnapshotId>,
+    pub aborted_transactions: Option<Vec<FetchResponseAbortedTransaction>>,
+    pub preferred_read_replica: Option<i32>,
+    pub records: Option<Vec<u8>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponseEpochEndOffset {
+    pub epoch: i32,
+    pub end_offset: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponseLeaderIdAndEpoch {
+    pub leader_id: i32,
+    pub leader_epoch: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponseSnapshotId {
+    pub end_offset: i64,
+    pub epoch: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponseAbortedTransaction {
+    pub producer_id: i64,
+    pub first_offset: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct FetchResponseNodeEndpoint {
+    pub node_id: i32,
+    pub host: String,
+    pub port: i32,
+    pub rack: Option<String>,
+}
+
