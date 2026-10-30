@@ -2117,6 +2117,10 @@ fn is_flexible(version: i16, first_flexible_version: i16) -> bool {
     version >= first_flexible_version
 }
 
+fn write_i8(out: &mut Vec<u8>, value: i8) {
+    out.extend_from_slice(&value.to_be_bytes());
+}
+
 fn write_i16(out: &mut Vec<u8>, value: i16) {
     out.extend_from_slice(&value.to_be_bytes());
 }
@@ -2291,6 +2295,11 @@ impl<'a> Reader<'a> {
         let start = self.cursor;
         self.cursor += len;
         Ok(&self.input[start..self.cursor])
+    }
+
+    fn read_i8(&mut self) -> Result<i8, ProtocolError> {
+        let value = self.read_exact(1)?[0];
+        Ok(value as i8)
     }
 
     fn read_i16(&mut self) -> Result<i16, ProtocolError> {

@@ -20,10 +20,10 @@ else
 fi
 
 OUTPUT_FILE="${RAFKA_DIR}/crates/protocol/src/generated_messages.rs"
-TARGETS="ApiVersionsRequest,ApiVersionsResponse,ProduceRequest,OffsetCommitRequest,OffsetCommitResponse,OffsetFetchRequest,OffsetFetchResponse,JoinGroupRequest,JoinGroupResponse,SyncGroupRequest,SyncGroupResponse,HeartbeatRequest,HeartbeatResponse,LeaveGroupRequest,LeaveGroupResponse,SaslHandshakeRequest,SaslHandshakeResponse,SaslAuthenticateRequest,SaslAuthenticateResponse,DeleteGroupsRequest,DeleteGroupsResponse,ListGroupsRequest,ListGroupsResponse"
+TARGETS="ApiVersionsRequest,ApiVersionsResponse,ProduceRequest,OffsetCommitRequest,OffsetCommitResponse,OffsetFetchRequest,OffsetFetchResponse,JoinGroupRequest,JoinGroupResponse,SyncGroupRequest,SyncGroupResponse,HeartbeatRequest,HeartbeatResponse,LeaveGroupRequest,LeaveGroupResponse,SaslHandshakeRequest,SaslHandshakeResponse,SaslAuthenticateRequest,SaslAuthenticateResponse,DeleteGroupsRequest,DeleteGroupsResponse,ListGroupsRequest,ListGroupsResponse,CreateTopicsRequest,CreateTopicsResponse,DeleteTopicsRequest,DeleteTopicsResponse"
 
 CODECS_FILE="${RAFKA_DIR}/crates/protocol/src/generated_codecs.rs"
-CODEC_TARGETS="DeleteGroupsRequest,DeleteGroupsResponse,ListGroupsRequest,ListGroupsResponse"
+CODEC_TARGETS="DeleteGroupsRequest,DeleteGroupsResponse,ListGroupsRequest,ListGroupsResponse,CreateTopicsRequest,CreateTopicsResponse,DeleteTopicsRequest,DeleteTopicsResponse"
 
 : "${CARGO_HOME:=${RAFKA_DIR}/.cargo-home}"
 : "${CARGO_TARGET_DIR:=${RAFKA_DIR}/target}"
