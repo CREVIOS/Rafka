@@ -4,8 +4,8 @@ use std::env;
 use std::path::PathBuf;
 
 use rafka_codegen::{
-    generate_message_structs_source, generate_registry_source, load_message_specs,
-    write_registry_file,
+    generate_codec_source, generate_message_structs_source, generate_registry_source,
+    load_message_specs, write_registry_file,
 };
 
 fn main() {
@@ -19,6 +19,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut input = None::<PathBuf>;
     let mut registry_output = None::<PathBuf>;
     let mut messages_output = None::<PathBuf>;
+    let mut codecs_output = None::<PathBuf>;
+    let mut codec_targets = Vec::<String>::new();
     let mut targets = vec![
         "ApiVersionsRequest".to_string(),
         "ApiVersionsResponse".to_string(),
@@ -69,6 +71,23 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 targets = parsed;
             }
+            "--codecs-output" => {
+                let value = args.next().ok_or("missing value for --codecs-output")?;
+                codecs_output = Some(PathBuf::from(value));
+            }
+            "--codec-targets" => {
+                let value = args.next().ok_or("missing value for --codec-targets")?;
+                let parsed = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|part| !part.is_empty())
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<_>>();
+                if parsed.is_empty() {
+                    return Err("empty --codec-targets list".into());
+                }
+                codec_targets = parsed;
+            }
             "--help" | "-h" => {
                 print_help();
                 return Ok(());
@@ -78,8 +97,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let input = input.ok_or("missing required --input")?;
-    if registry_output.is_none() && messages_output.is_none() {
-        return Err("at least one output must be provided (--output or --messages-output)".into());
+    if registry_output.is_none() && messages_output.is_none() && codecs_output.is_none() {
+        return Err(
+            "at least one output must be provided (--output, --messages-output, or --codecs-output)"
+                .into(),
+        );
     }
     let specs = load_message_specs(&input)?;
     if let Some(output) = registry_output {
@@ -101,9 +123,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             output.display()
         );
     }
+    if let Some(output) = codecs_output {
+        let refs = codec_targets.iter().map(String::as_str).collect::<Vec<_>>();
+        let source = generate_codec_source(&specs, &refs)?;
+        write_registry_file(&output, &source)?;
+        println!(
+            "generated protocol codecs: {} targets -> {}",
+            refs.len(),
+            output.display()
+        );
+    }
     Ok(())
 }
 
 fn print_help() {
-    println!("Usage: rafka-codegen --input <message-spec-dir> [--output <generated-registry-file>] [--messages-output <generated-messages-file>] [--targets <comma-separated-message-names>]");
+    println!("Usage: rafka-codegen --input <message-spec-dir> [--output <generated-registry-file>] [--messages-output <generated-messages-file>] [--targets <comma-separated-message-names>] [--codecs-output <generated-codecs-file>] [--codec-targets <comma-separated-message-names>]");
 }

@@ -8,6 +8,21 @@ use std::path::{Path, PathBuf};
 use jsonc_parser::{parse_to_serde_value, ParseOptions};
 use serde::Deserialize;
 
+pub mod codec_gen;
+
+pub use codec_gen::generate_codec_source;
+
+/// Public wrapper for the internal snake_case renamer used by both struct
+/// and codec generation so generated field access stays in sync.
+pub fn snake_case_pub(name: &str) -> String {
+    snake_case(name)
+}
+
+/// Public wrapper for nested struct type naming.
+pub fn nested_struct_name_pub(top_level: &str, struct_name: &str) -> String {
+    nested_struct_name(top_level, struct_name)
+}
+
 #[derive(Debug)]
 pub enum CodegenError {
     Io(std::io::Error),
