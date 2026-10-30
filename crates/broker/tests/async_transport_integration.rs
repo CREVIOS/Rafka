@@ -68,13 +68,8 @@ fn write_unsigned_varint(out: &mut Vec<u8>, mut value: u32) {
 
 fn request_header_version(api_key: i16, api_version: i16) -> i16 {
     match api_key {
-        API_KEY_API_VERSIONS => {
-            if api_version >= 3 {
-                2
-            } else {
-                1
-            }
-        }
+        API_KEY_API_VERSIONS if api_version >= 3 => 2,
+        API_KEY_API_VERSIONS => 1,
         _ => 1,
     }
 }
